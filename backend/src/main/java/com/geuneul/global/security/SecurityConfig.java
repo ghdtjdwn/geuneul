@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
                         .requestMatchers("/me/bookmarks").authenticated()
                         .requestMatchers("/me/reviews", "/me/comments", "/me/reactions").authenticated()
                         .requestMatchers("/me/following").authenticated()

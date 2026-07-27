@@ -2,9 +2,9 @@ package com.geuneul.domain.report;
 
 import com.geuneul.domain.auth.JwtService;
 import com.geuneul.domain.auth.Role;
-import com.geuneul.domain.ai.AiSummaryService;
 import com.geuneul.domain.auth.TrustScoreService;
 import com.geuneul.domain.photo.PhotoService;
+import com.geuneul.domain.photo.PhotoUploadService;
 import com.geuneul.domain.place.PlaceRepository;
 import com.geuneul.domain.report.dto.ReportCreateRequest;
 import com.geuneul.domain.report.dto.ReportResponse;
@@ -39,7 +39,8 @@ class ReportServiceTest {
     private ReportRepository reportRepository;
     private PlaceRepository placeRepository;
     private TrustScoreService trustScoreService;
-    private AiSummaryService aiSummaryService;
+    private ReportDerivedCacheService derivedCacheService;
+    private PhotoUploadService photoUploadService;
     private ReportService reportService;
 
     @BeforeEach
@@ -47,10 +48,12 @@ class ReportServiceTest {
         reportRepository = mock(ReportRepository.class);
         placeRepository = mock(PlaceRepository.class);
         trustScoreService = mock(TrustScoreService.class);
-        aiSummaryService = mock(AiSummaryService.class);
+        derivedCacheService = mock(ReportDerivedCacheService.class);
+        photoUploadService = mock(PhotoUploadService.class);
         // PhotoService는 버킷 미설정이라 presignGet이 저장 photoUrl을 그대로 통과시킨다(N1 passthrough 분기).
-        PhotoService photoService = new PhotoService(mock(S3Presigner.class), "", "ap-northeast-2", CLOCK);
-        reportService = new ReportService(reportRepository, placeRepository, trustScoreService, photoService, aiSummaryService, CLOCK);
+        PhotoService photoService = new PhotoService(mock(S3Presigner.class), "", "ap-northeast-2", CLOCK, photoUploadService);
+        reportService = new ReportService(reportRepository, placeRepository, trustScoreService, photoService,
+                derivedCacheService, photoUploadService, CLOCK);
 
         when(placeRepository.existsByIdAndDeletedAtIsNull(1L)).thenReturn(true);
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -63,12 +66,12 @@ class ReportServiceTest {
     @Test
     @DisplayName("비로그인(principal null) 제보는 userId 없이 저장되고 trust_score 재계산도 안 일어난다")
     void anonymousPrincipalMeansNoUserId() {
-        ReportResponse response = reportService.create(null, request(null));
+        ReportResponse response = reportService.create(null, request(null), "x:test");
 
         assertThat(response.anonymous()).isTrue();
         verify(trustScoreService, never()).recalculate(anyLong());
         // 익명 제보라도 장소 상태가 바뀌었으니 AI 요약 캐시는 무효화된다(다음 조회 때 최신 반영).
-        verify(aiSummaryService).evictSummary(1L);
+        verify(derivedCacheService).evictAfterCommit(1L);
     }
 
     @Test
@@ -76,7 +79,7 @@ class ReportServiceTest {
     void loggedInUserAttachesUserIdAndRecalculatesTrust() {
         JwtService.AuthPrincipal principal = new JwtService.AuthPrincipal(10L, Role.USER);
 
-        ReportResponse response = reportService.create(principal, request(false));
+        ReportResponse response = reportService.create(principal, request(false), "x:test");
 
         assertThat(response.anonymous()).isFalse();
         verify(trustScoreService).recalculate(10L);
@@ -87,7 +90,7 @@ class ReportServiceTest {
     void loggedInUserChoosingAnonymousDisplayStillTracksTrust() {
         JwtService.AuthPrincipal principal = new JwtService.AuthPrincipal(10L, Role.USER);
 
-        ReportResponse response = reportService.create(principal, request(true));
+        ReportResponse response = reportService.create(principal, request(true), "x:test");
 
         assertThat(response.anonymous()).isTrue(); // 화면 표시는 익명
         verify(trustScoreService).recalculate(10L); // 그러나 신뢰도 가중 대상에서는 빠지지 않음
@@ -100,7 +103,7 @@ class ReportServiceTest {
         JwtService.AuthPrincipal principal = new JwtService.AuthPrincipal(10L, Role.USER);
 
         assertThatThrownBy(() -> reportService.create(principal,
-                new ReportCreateRequest(999L, ReportType.COOL, null, null, null, null, null)))
+                new ReportCreateRequest(999L, ReportType.COOL, null, null, null, null, null), "x:test"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("404");
 
@@ -112,7 +115,7 @@ class ReportServiceTest {
     @DisplayName("GPS 좌표가 하나만 오면 400")
     void partialReporterLocationIs400() {
         assertThatThrownBy(() -> reportService.create(null,
-                new ReportCreateRequest(1L, ReportType.COOL, null, null, null, 37.5, null)))
+                new ReportCreateRequest(1L, ReportType.COOL, null, null, null, 37.5, null), "x:test"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400");
 
@@ -123,7 +126,7 @@ class ReportServiceTest {
     @DisplayName("GPS 좌표가 NaN이면 400")
     void nanReporterLocationIs400() {
         assertThatThrownBy(() -> reportService.create(null,
-                new ReportCreateRequest(1L, ReportType.COOL, null, null, null, Double.NaN, 127.0)))
+                new ReportCreateRequest(1L, ReportType.COOL, null, null, null, Double.NaN, 127.0), "x:test"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400");
 

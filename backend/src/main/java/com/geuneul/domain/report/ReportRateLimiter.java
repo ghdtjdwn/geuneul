@@ -1,5 +1,7 @@
 package com.geuneul.domain.report;
 
+import com.geuneul.global.web.RedisFixedWindowRateLimiter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -14,9 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * ConcurrentHashMap이 키별 상호배제를 보장하므로 별도 락/AtomicInteger 없이 원자적이다
  * (분·시간 카운트를 각각 다른 맵에서 check-then-act 하던 이전 구조의 TOCTOU를 제거).
  *
- * <p>의도적으로 인메모리·무의존성이다: 프로덕션이 단일 Fargate 태스크(수평 확장 전)이고,
- * 2026 관례도 "단일 인스턴스는 인메모리로 시작, 수평 확장 시 Redis(Bucket4j 등)로 이전"이다.
- * 다중 인스턴스가 되면 이 클래스만 Redis 구현으로 교체한다.
+ * <p>정상 경로는 Redis Lua 공유 카운터라 ECS scale-out에서도 한도가 유지된다. Redis 장애 시에는
+ * 이 bounded in-memory 구현으로 폴백해 가용성을 보존하며, 폴백 동안에는 인스턴스별 한도라는 경계를 감수한다.
  */
 @Component
 public class ReportRateLimiter {
@@ -28,13 +29,23 @@ public class ReportRateLimiter {
 
     private final Clock clock;
     private final Map<String, ClientWindow> windows = new ConcurrentHashMap<>();
+    private RedisFixedWindowRateLimiter distributed;
 
     public ReportRateLimiter(Clock clock) {
         this.clock = clock;
     }
 
+    @Autowired(required = false)
+    void setDistributed(RedisFixedWindowRateLimiter distributed) {
+        this.distributed = distributed;
+    }
+
     /** 허용되면 true(카운트 소모), 초과면 false. 분·시간 창 모두 여유가 있어야 허용된다. */
     public boolean tryAcquire(String clientKey) {
+        if (distributed != null) {
+            var shared = distributed.tryAcquire("reports", clientKey, PER_MINUTE, PER_HOUR);
+            if (shared.isPresent()) return shared.get();
+        }
         long epochSecond = clock.instant().getEpochSecond();
         long minuteBucket = epochSecond / 60;
         long hourBucket = epochSecond / 3_600;

@@ -17,8 +17,12 @@ async function backendFetch(path: string, search: string, request?: NextRequest)
   const identity: Record<string, string> = {};
   if (request) {
     const xff = request.headers.get("x-forwarded-for") ?? "";
-    const clientIp = request.headers.get("x-real-ip") ?? xff.split(",")[0].trim();
+    // Vercel documents x-vercel-forwarded-for as the non-overridable client-IP header when an upstream proxy exists.
+    const clientIp = request.headers.get("x-vercel-forwarded-for")
+      ?? request.headers.get("x-real-ip")
+      ?? xff.split(",")[0].trim();
     const proxySecret = process.env.GEUNEUL_PROXY_SECRET ?? "";
+    if (!proxySecret) throw new Error("GEUNEUL_PROXY_SECRET is required for rate-limited proxy routes");
     if (xff) identity["x-forwarded-for"] = xff;
     if (clientIp) identity["x-client-ip"] = clientIp;
     if (proxySecret) identity["x-proxy-auth"] = proxySecret;
@@ -42,12 +46,16 @@ export async function proxyPost(path: string, request: Request): Promise<NextRes
   }
   try {
     const body = await request.text();
-    // 원 클라이언트 IP: Vercel이 세팅한 x-real-ip 우선, 없으면 XFF 최좌측.
+    // Vercel이 외부 프록시 뒤에서도 덮어쓰는 전용 헤더를 우선하고, 직접 배포 환경용 헤더로 폴백한다.
     const xff = request.headers.get("x-forwarded-for") ?? "";
-    const clientIp = request.headers.get("x-real-ip") ?? xff.split(",")[0].trim();
-    // BFF↔백엔드 공유 시크릿(서버 전용). 설정 시 백엔드가 x-client-ip를 신뢰해 XFF 위조 우회를 차단(ProxyClientResolver).
-    // 미설정이면 빈 헤더 → 백엔드는 기존 최좌측 XFF 동작(회귀 없음).
+    const clientIp = request.headers.get("x-vercel-forwarded-for")
+      ?? request.headers.get("x-real-ip")
+      ?? xff.split(",")[0].trim();
+    // BFF↔백엔드 공유 시크릿(서버 전용). 없으면 신뢰할 client identity를 증명할 수 없으므로 fail-safe 중단한다.
     const proxySecret = process.env.GEUNEUL_PROXY_SECRET ?? "";
+    if (!proxySecret) {
+      return NextResponse.json({ error: "config", message: "GEUNEUL_PROXY_SECRET is not configured." }, { status: 500 });
+    }
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
       headers: {
@@ -85,8 +93,13 @@ export async function proxyOptionalAuthedPost(path: string, request: NextRequest
   try {
     const body = await request.text();
     const xff = request.headers.get("x-forwarded-for") ?? "";
-    const clientIp = request.headers.get("x-real-ip") ?? xff.split(",")[0].trim();
+    const clientIp = request.headers.get("x-vercel-forwarded-for")
+      ?? request.headers.get("x-real-ip")
+      ?? xff.split(",")[0].trim();
     const proxySecret = process.env.GEUNEUL_PROXY_SECRET ?? "";
+    if (!proxySecret) {
+      return NextResponse.json({ error: "config", message: "GEUNEUL_PROXY_SECRET is not configured." }, { status: 500 });
+    }
     const token = request.cookies.get(SESSION_COOKIE)?.value;
     const authorization = token ? `Bearer ${token}` : (request.headers.get("authorization") ?? "");
     const res = await fetch(`${BASE}${path}`, {
@@ -205,8 +218,13 @@ export async function proxyPhotoPresign(request: NextRequest): Promise<NextRespo
   try {
     const body = await request.text();
     const xff = request.headers.get("x-forwarded-for") ?? "";
-    const clientIp = request.headers.get("x-real-ip") ?? xff.split(",")[0].trim();
+    const clientIp = request.headers.get("x-vercel-forwarded-for")
+      ?? request.headers.get("x-real-ip")
+      ?? xff.split(",")[0].trim();
     const proxySecret = process.env.GEUNEUL_PROXY_SECRET ?? "";
+    if (!proxySecret) {
+      return NextResponse.json({ error: "config", message: "GEUNEUL_PROXY_SECRET is not configured." }, { status: 500 });
+    }
     const token = request.cookies.get(SESSION_COOKIE)?.value;
     const res = await fetch(`${BASE}/photos/presign`, {
       method: "POST",

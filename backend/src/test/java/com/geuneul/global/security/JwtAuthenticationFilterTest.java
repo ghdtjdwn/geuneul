@@ -32,16 +32,19 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    @DisplayName("USER 토큰은 DB role 재확인을 하지 않는다")
-    void userTokenDoesNotHitRepository() throws Exception {
+    @DisplayName("USER 토큰도 DB token_version이 일치할 때만 인증된다")
+    void userTokenChecksServerVersion() throws Exception {
+        User user = mock(User.class);
+        when(user.getTokenVersion()).thenReturn(0L);
         when(jwtService.parse("user-token")).thenReturn(new JwtService.AuthPrincipal(10L, Role.USER));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
 
         filter.doFilter(request("user-token"), new MockHttpServletResponse(), new MockFilterChain());
 
         assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
                 .extracting("authority")
                 .containsExactly("ROLE_USER");
-        verify(userRepository, never()).findById(10L);
+        verify(userRepository).findById(10L);
     }
 
     @Test
@@ -49,6 +52,7 @@ class JwtAuthenticationFilterTest {
     void adminTokenDemotedWhenDbRoleIsUser() throws Exception {
         User user = mock(User.class);
         when(user.getRole()).thenReturn(Role.USER);
+        when(user.getTokenVersion()).thenReturn(0L);
         when(jwtService.parse("admin-token")).thenReturn(new JwtService.AuthPrincipal(10L, Role.ADMIN));
         when(userRepository.findById(10L)).thenReturn(Optional.of(user));
 
@@ -67,6 +71,7 @@ class JwtAuthenticationFilterTest {
     void adminTokenKeptWhenDbRoleIsAdmin() throws Exception {
         User user = mock(User.class);
         when(user.getRole()).thenReturn(Role.ADMIN);
+        when(user.getTokenVersion()).thenReturn(0L);
         when(jwtService.parse("admin-token")).thenReturn(new JwtService.AuthPrincipal(10L, Role.ADMIN));
         when(userRepository.findById(10L)).thenReturn(Optional.of(user));
 
@@ -75,6 +80,19 @@ class JwtAuthenticationFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
                 .extracting("authority")
                 .containsExactly("ROLE_ADMIN");
+    }
+
+    @Test
+    @DisplayName("로그아웃으로 DB token_version이 증가하면 기존 JWT는 즉시 익명 처리된다")
+    void revokedVersionIsRejected() throws Exception {
+        User user = mock(User.class);
+        when(user.getTokenVersion()).thenReturn(1L);
+        when(jwtService.parse("old-token")).thenReturn(new JwtService.AuthPrincipal(10L, Role.USER, 0L));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+
+        filter.doFilter(request("old-token"), new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
     private static MockHttpServletRequest request(String token) {

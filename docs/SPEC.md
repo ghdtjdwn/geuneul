@@ -126,8 +126,8 @@ report_freshness_score:
 - **Geocoding**: **카카오 로컬 API**(주소→좌표, 지번/도로명) — 공중화장실 WGS84 결측 보완. 결과 좌표는 저장(멱등·rate limit 회피).
 - **Cache**: Redis (날씨 초단기실황 TTL 캐시, rate limit, 조회 캐시)
 - **Realtime/Event**: 제보 급증 알림 등은 **Redis Streams / Postgres LISTEN·NOTIFY**로. (Kafka 등 과설계 금지 — 필요 입증 후에만.)
-- **Storage**: S3 호환 (제보/후기 사진, presigned URL)
-- **Auth**: **카카오/구글 소셜 로그인(OAuth2) + JWT 세션**
+- **Storage**: private S3 (제보/후기 사진, `If-None-Match:*` presigned PUT + 일회성 upload claim/HeadObject 검증 + 만료 미사용 object bounded cleanup)
+- **Auth**: **카카오/구글 소셜 로그인(OAuth2) + user row 직렬화·token_version으로 서버 폐기 가능한 JWT 세션**
 - **Map**: Kakao Maps (국내 POI/UX)
 - **AI**: OpenAI 호환 프로바이더 중립 클라이언트(장소 요약) — 곁다리, 교체는 config만
 - **Infra (AWS)**: **ECS Fargate**(관리형 컨테이너) + **RDS PostgreSQL(PostGIS)** + **Terraform(IaC)** + **GitHub Actions(OIDC로 키 없이 배포)** + **ECR** + ALB + CloudFront. 프론트는 Vercel. Docker Compose는 로컬 개발용.
@@ -137,7 +137,7 @@ report_freshness_score:
 ## 8. ERD
 
 ```
-users(id, provider, provider_id, email, nickname, profile_image, trust_score, role, created_at)
+users(id, provider, provider_id, email, nickname, profile_image, trust_score, role, token_version, created_at)
   # provider: KAKAO | GOOGLE ; role: USER | ADMIN
 
 places(id, name, category, address, geom(Point,4326), source, source_external_id,
@@ -188,7 +188,7 @@ POST /reports                                       # 장소 상태 제보(휘�
 POST /reviews                                        # 장소 후기(영구, 로그인)
 GET  /places/{id}/reviews
 POST /reviews/{id}/comments                          # 2차
-POST /photos/presign                                 # 사진 업로드 URL 발급
+POST /photos/presign                                 # 소유자·용도 claim 기록 + 사진 업로드 URL 발급
 POST /flags                                          # 허위 제보/후기 신고
 
 # 추천/관리

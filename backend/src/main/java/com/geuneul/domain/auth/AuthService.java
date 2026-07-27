@@ -51,16 +51,27 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "사용자를 찾을 수 없습니다"));
     }
 
+    /** Revokes every JWT issued with the current token version, including stolen copies. */
+    @Transactional
+    public void logout(long userId) {
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "사용자를 찾을 수 없습니다"));
+        user.revokeSessions();
+    }
+
     private User upsert(AuthProvider provider, OAuthUserInfo info) {
         String nickname = (info.nickname() == null || info.nickname().isBlank())
                 ? defaultNickname(provider) : info.nickname();
-        return userRepository.findByProviderAndProviderId(provider, info.providerId())
-                .map(existing -> {
-                    existing.refreshProfile(info.email(), nickname, info.profileImage());
-                    return existing; // 영속 상태 — 트랜잭션 커밋 시 dirty checking으로 반영
-                })
-                .orElseGet(() -> userRepository.save(
-                        User.create(provider, info.providerId(), info.email(), nickname, info.profileImage())));
+        User user = userRepository.findByProviderAndProviderIdForUpdate(provider, info.providerId())
+                .orElseGet(() -> {
+                    userRepository.insertIfAbsent(provider.name(), info.providerId(), info.email(), nickname,
+                            info.profileImage());
+                    return userRepository.findByProviderAndProviderIdForUpdate(provider, info.providerId())
+                            .orElseThrow(() -> new IllegalStateException("OAuth user upsert did not produce a row"));
+                });
+        // Both the insert winner and conflict loser refresh while holding the same row lock.
+        user.refreshProfile(info.email(), nickname, info.profileImage());
+        return user;
     }
 
     private static String defaultNickname(AuthProvider provider) {

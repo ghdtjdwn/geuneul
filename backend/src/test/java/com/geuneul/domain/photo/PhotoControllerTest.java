@@ -22,6 +22,7 @@ import java.time.OffsetDateTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -66,7 +67,7 @@ class PhotoControllerTest {
     @Test
     @DisplayName("정상 presign 요청(미인증)은 200 + 발급 정보를 돌려준다")
     void presignReturnsOk() throws Exception {
-        given(photoService.presign(any(), eq(false))).willReturn(sample());
+        given(photoService.presign(any(), isNull(), any())).willReturn(sample());
 
         mvc.perform(post("/photos/presign").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"contentType\":\"image/jpeg\",\"contentLength\":2000000,\"purpose\":\"report\"}"))
@@ -109,20 +110,20 @@ class PhotoControllerTest {
     @Test
     @DisplayName("Authorization 헤더 없는 요청은 authenticated=false로 서비스에 전달된다 (report 익명 허용)")
     void anonymousPassesFalseToService() throws Exception {
-        given(photoService.presign(any(), eq(false))).willReturn(sample());
+        given(photoService.presign(any(), isNull(), any())).willReturn(sample());
 
         mvc.perform(post("/photos/presign").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"contentType\":\"image/jpeg\",\"contentLength\":100,\"purpose\":\"report\"}"))
                 .andExpect(status().isOk());
 
-        then(photoService).should().presign(any(), eq(false));
+        then(photoService).should().presign(any(), isNull(), any());
     }
 
     @Test
     @DisplayName("유효 Bearer 토큰이면 authenticated=true로 서비스에 전달된다 (review 로그인 경로)")
     void authenticatedPassesTrueToService() throws Exception {
         given(jwtService.parse("valid-token")).willReturn(new JwtService.AuthPrincipal(1L, Role.USER));
-        given(photoService.presign(any(), eq(true))).willReturn(sample());
+        given(photoService.presign(any(), any(), any())).willReturn(sample());
 
         mvc.perform(post("/photos/presign")
                         .header("Authorization", "Bearer valid-token")
@@ -130,13 +131,13 @@ class PhotoControllerTest {
                         .content("{\"contentType\":\"image/jpeg\",\"contentLength\":100,\"purpose\":\"review\"}"))
                 .andExpect(status().isOk());
 
-        then(photoService).should().presign(any(), eq(true));
+        then(photoService).should().presign(any(), any(), any());
     }
 
     @Test
     @DisplayName("서비스가 401을 던지면(review 미인증) 그대로 전파된다")
     void serviceUnauthorizedPropagates() throws Exception {
-        given(photoService.presign(any(), eq(false)))
+        given(photoService.presign(any(), isNull(), any()))
                 .willThrow(new org.springframework.web.server.ResponseStatusException(
                         org.springframework.http.HttpStatus.UNAUTHORIZED, "로그인이 필요해요."));
 

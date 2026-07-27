@@ -19,7 +19,7 @@ import java.util.Date;
  *
  * - 시크릿(JWT_SECRET)은 **지연 검증**한다: 비어 있어도 컨텍스트는 뜨고(배포 안전성 — 값 주입 전 배포되어도
  *   앱이 안 죽음), 실제 발급/검증 시점에 없거나 너무 짧으면(HS256은 ≥256bit=32바이트) 명확히 실패한다.
- * - 페이로드: sub=userId, role 클레임. 만료는 기본 7일(카카오/구글 재로그인으로 갱신).
+ * - 페이로드: sub=userId, role, ver(token_version). 만료는 기본 7일(카카오/구글 재로그인으로 갱신).
  * - Clock 주입(TimeConfig)으로 발급/만료 시각을 테스트에서 결정적으로 제어.
  */
 @Service
@@ -43,6 +43,7 @@ public class JwtService {
         return Jwts.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim("role", user.getRole().name())
+                .claim("ver", user.getTokenVersion())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(expiration)))
                 .signWith(key())
@@ -59,7 +60,9 @@ public class JwtService {
         Claims c = jws.getPayload();
         long userId = Long.parseLong(c.getSubject());
         Role role = Role.valueOf(c.get("role", String.class));
-        return new AuthPrincipal(userId, role);
+        Object rawVersion = c.get("ver");
+        long tokenVersion = rawVersion instanceof Number number ? number.longValue() : 0L;
+        return new AuthPrincipal(userId, role, tokenVersion);
     }
 
     private SecretKey key() {
@@ -72,6 +75,10 @@ public class JwtService {
     }
 
     /** JWT에서 복원한 인증 주체. */
-    public record AuthPrincipal(long userId, Role role) {
+    public record AuthPrincipal(long userId, Role role, long tokenVersion) {
+        /** Existing tests and pre-migration tokens retain version zero compatibility. */
+        public AuthPrincipal(long userId, Role role) {
+            this(userId, role, 0L);
+        }
     }
 }

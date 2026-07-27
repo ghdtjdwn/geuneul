@@ -36,8 +36,37 @@ apply 후 output 확인:
 
 ## 4. 확인 & 이후
 - `http://<alb_url>/actuator/health` → `{"status":"UP"}` (Flyway 마이그레이션 성공 = PostGIS·GiST 생성됨)
-- `http://<alb_url>/swagger-ui.html`
+- `https://<cloudfront_domain>/swagger-ui.html` → 404 (운영 Swagger/OpenAPI 기본 차단). 로컬에서만
+  `SPRINGDOC_ENABLED=true`로 활성화한다.
 - **이후 `main`에 `backend/**` 변경이 push될 때마다 자동 재배포.** (문서·인프라만 바뀐 push는 `deploy.yml`의 paths 필터로 배포를 트리거하지 않음. CI(test)는 별도 `ci.yml`.)
+
+### 보안 하드닝 rollout (V21, 운영 승인 필요)
+
+이 저장소는 V21과 애플리케이션 변경만 준비한다. 다음 작업은 production migration/env/deploy이므로 실행 전 확인한다.
+
+1. RDS가 `available`, `StorageEncrypted=true`, 자동 백업/PITR가 켜져 있는지 확인한다. 별도 SQL을 수동 실행하지 않는다.
+2. backend SSM `/geuneul/proxy_secret`에 32자 이상의 새 값을 설정하고 backend를 먼저 rolling deploy한다.
+   이 deploy가 Flyway V21(`users.token_version`, `photo_uploads`, `report_cache_generations`)을 한 번 적용한다.
+   값을 명령행 기록·문서·로그에 출력하지 않는다.
+3. 기존 frontend를 유지한 채 backend health·기존 API 호환성과 `POST /auth/logout`의 존재를 먼저 확인한다.
+   backend에만 secret이 있는 이 구간은 증명 없는 기존 BFF 요청을 거부하지 않고, 위조 불가능한
+   최우측 XFF/TCP peer bucket으로 축약해 rate limit 정밀도만 낮춘다.
+4. 같은 값을 Vercel Production `GEUNEUL_PROXY_SECRET`에 설정한 뒤에만 새 frontend/BFF를 배포한다.
+   frontend에 secret이 없으면 rate-limited BFF route가 500으로 fail-safe하므로 env 반영 전에 새 BFF를 배포하지 않는다.
+5. health와 로그인→`POST /auth/logout`→기존 JWT 401, presign→`If-None-Match: *` S3 PUT→report/review 1회 성공을
+   확인한다. 같은 claim 재사용과 발급 기록 없는 HTTPS 사진 URL은 400, 같은 key 재업로드는 S3 412여야 한다.
+   cleanup metric `geuneul_photo_cleanup_objects_total`은 local/staging의 Prometheus opt-in 또는 승인된 OTLP exporter에서
+   확인한다. 동일 OAuth 계정의 동시 첫 로그인은 user 1행으로 수렴하고, report 생성 직후
+   AI summary/popular-times는 새 generation을 조회해야 한다. production `/actuator/prometheus`는 계속 404여야 한다.
+6. frontend 배포 후 실패하면 frontend만 직전 deployment로 먼저 rollback하고 호환되는 새 backend는 유지한다.
+   backend 검증 단계에서 실패했다면 frontend를 바꾸지 않은 채 ECS를 직전 task definition으로 rollback한다.
+   V21은 additive라 table/column을 drop하지 않고 원인 수정 뒤 forward deploy한다.
+
+Backend secret이 없으면 전달 IP 헤더를 신뢰하지 않아 공유 TCP-peer bucket으로 fail-safe한다.
+Frontend secret이 없으면 새 BFF가 rate-limited route를 500으로 중단한다. 따라서 backend 먼저 배포·호환 검증 후
+frontend secret 주입·BFF 배포 순서를 지켜야 한다.
+Cleanup 장애 시 `PHOTO_CLEANUP_ENABLED=false`인 task revision으로 일시 중단할 수 있다. S3 object나 V21 row를 수동 삭제하지
+않고 15분 lease retry와 `outcome="failed"` metric을 먼저 확인한다.
 
 ## 비용 메모
 - 2026-07-27 서울 리전 정가와 라이브 구성 기준 상시 하한은 **약 $89.41/월 + 변동 사용량**이다. Fargate(0.5 vCPU/1GB) $20.72, ALB 기본료 $16.43, RDS 컴퓨트 $20.44 + gp3 20GB $2.62, ElastiCache $18.25, 공인 IPv4 3개 $10.95가 주요 항목이다. ECR·로그·S3·전송·ALB LCU는 별도다.

@@ -11,12 +11,11 @@
 </p>
 
 [![API](https://img.shields.io/badge/API-live_health-17957e)](https://d2pedv974beobb.cloudfront.net/actuator/health)
-[![Swagger](https://img.shields.io/badge/API-Swagger-85EA2D?logo=swagger&logoColor=black)](https://d2pedv974beobb.cloudfront.net/swagger-ui.html)
 
 [![Public Data](https://img.shields.io/badge/공공데이터-150k%2B_POI-2f9e44)](#데이터--etl-멱등-적재--지오코딩)
 [![Radius p95](https://img.shields.io/badge/반경검색_p95-1.35s_로컬30만-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
-[![Coverage](https://img.shields.io/badge/JaCoCo-86.8%25-17957e)](#기술-스택)
-[![ADR](https://img.shields.io/badge/ADR-30-informational)](./docs/adr/README.md)
+[![Coverage](https://img.shields.io/badge/JaCoCo-87.22%25-17957e)](#기술-스택)
+[![ADR](https://img.shields.io/badge/ADR-31-informational)](./docs/adr/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](./LICENSE)
 
 [![CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml)
@@ -52,6 +51,10 @@
 - 공간 검색은 DB 레이어에서 — 반경 `ST_DWithin` · 최근접 kNN `<->` · bounds 조회를 PostGIS GiST 인덱스로 처리한다. 프로덕션 저부하 k6로 반경 p95를 2.68s→~1.4s로 튜닝했고([ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)), 현재 코드는 fingerprint를 고정한 로컬 30만 places에서 p95 1.35s·실패율 0%를 재검증했다(조건이 달라 개선률은 직접 비교하지 않음, [ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - 멱등 ETL + 지오코딩 — `source + source_external_id` 자연키로 재실행해도 중복 없는 배치 upsert. 무더위쉼터 60,297 · 공중화장실 52,334 · 도서관 3,551 · 상권 카페/스터디카페 등 전국 표준데이터를 그대로 적재하고, WGS84 결측 좌표는 카카오 지오코딩으로 보완한다. V20 실행 원장은 retry/dead-letter/backfill/freshness를 원본 payload 없이 추적하며, API 부분 응답과 원격 CSV digest 불일치는 DB 변경 전에 실패시킨다([ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - 실시간 UGC 시공간 스코어링 — 제보(휘발성 상태)/후기(영구 평판) 2단 UGC를 신뢰도 가중으로 `survival_score`에 집계. 제보 급증은 Postgres `LISTEN/NOTIFY` → 멀티 인스턴스 팬아웃 → SSE로, 관심 장소 알림은 `INSERT … RETURNING`으로 정확히 1회 푸시한다([ADR-0016](./docs/adr/0016-realtime-report-surge-listen-notify-sse.md)·[0026](./docs/adr/0026-bookmark-status-change-notification.md)).
+- 서버 검증 보안 경계 — private S3 사진은 조건부 PUT과 일회성 claim으로 소유자·용도·실제 object metadata를 확인한 뒤에만 저장하고, 만료 미사용 object는 bounded cleanup한다. JWT login/logout은 같은 user row에서 직렬화하며 DB token version으로 기존 토큰 사본까지 폐기한다. Redis 레이트리밋은 ECS 인스턴스 간 공유한다([ADR-0031](./docs/adr/0031-security-boundaries-session-upload-rate-limit.md)).
+
+review와 photo claim은 하나의 transaction으로 commit/rollback하고, 후기에서 제거된 detached 사진은 현재 참조를 재확인한 뒤 cleanup합니다. V21 이전 claim 없는 사진은 기존 후기에서 제거할 수 있지만 자동 cleanup 대상은 아닙니다. 동시 첫 OAuth login·report cache stale reader·cleanup clock skew는 PostgreSQL lock·generation·DB clock을 각 일관성 경계로 삼습니다.
+보안 취약점은 공개 issue 대신 [GitHub private vulnerability reporting](./.github/SECURITY.md)으로 제보해 주세요.
 
 > 스택: Spring Boot 4 · Java 21 · PostgreSQL+PostGIS · Redis · AWS ECS Fargate · Terraform · Next.js(PWA)
 
@@ -93,8 +96,8 @@ freshness 버킷:  0~1h=1.0 | 1~3h=0.8 | 오늘=0.6 | 이번주=0.3 | 그 외=0.
 # 1) 인프라 — PostGIS + Redis
 docker compose up -d
 
-# 2) 백엔드 — http://localhost:8080/swagger-ui.html
-cd backend && ./gradlew bootRun
+# 2) 백엔드 — API 문서는 로컬에서만 명시적으로 활성화
+cd backend && SPRINGDOC_ENABLED=true ./gradlew bootRun
 
 # 3) 프론트 — http://localhost:3000  (Kakao JS 키 없으면 지도는 placeholder, 데이터는 정상)
 cd frontend && pnpm install && pnpm dev
@@ -141,15 +144,15 @@ GET /alerts/stream            # text/event-stream (SSE)
 | | |
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS(Hibernate Spatial + JTS) · Flyway · Redis |
-| Frontend | Next.js 16(App Router) · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist(PWA) — `frontend/` ([README](./frontend/README.md)) |
+| Frontend | Next.js 16.2.12(App Router) · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist(PWA) — `frontend/` ([README](./frontend/README.md)) |
 | Infra | AWS ECS Fargate · RDS · Terraform · GitHub Actions(OIDC) · ECR · ALB · Vercel |
-| Test/Ops | Testcontainers 2(실 PostGIS, 506 tests·skip 0) · JaCoCo(line 86.8%·게이트 70%) · DB/요청 seed 고정 k6+JSON summary · Prometheus/Grafana · gitleaks · Swagger |
+| Test/Ops | Testcontainers 2(실 PostGIS) · JaCoCo(게이트 70%) · DB/요청 seed 고정 k6+JSON summary · Prometheus/Grafana · gitleaks · CodeQL · Dependabot · 로컬 전용 Swagger |
 
 ## 문서
 
 - 프로젝트 스펙(목표·범위·ERD·API): [`docs/SPEC.md`](./docs/SPEC.md)
 - 전체 기능·구현 방식·기술 스택: [`docs/FEATURES.md`](./docs/FEATURES.md)
-- 아키텍처·데모: [`docs/architecture.md`](./docs/architecture.md) · 의사결정 기록(ADR): [`docs/adr/`](./docs/adr) (0001–0030, [색인](./docs/adr/README.md))
+- 아키텍처·데모: [`docs/architecture.md`](./docs/architecture.md) · 의사결정 기록(ADR): [`docs/adr/`](./docs/adr) (0001–0031, [색인](./docs/adr/README.md))
 - 배포(AWS): [`DEPLOY.md`](./DEPLOY.md)
 - 디자인·API 계약 레퍼런스: [`docs/design-brief.md`](./docs/design-brief.md) · 프론트엔드: [`frontend/README.md`](./frontend/README.md)
 

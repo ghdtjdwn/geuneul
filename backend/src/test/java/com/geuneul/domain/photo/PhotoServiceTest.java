@@ -1,5 +1,7 @@
 package com.geuneul.domain.photo;
 
+import com.geuneul.domain.auth.JwtService;
+import com.geuneul.domain.auth.Role;
 import com.geuneul.domain.photo.dto.PhotoPresignRequest;
 import com.geuneul.domain.photo.dto.PhotoPresignResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
@@ -36,7 +39,7 @@ class PhotoServiceTest {
     }
 
     private static PhotoService service(String bucket) {
-        return new PhotoService(fakePresigner(), bucket, "ap-northeast-2", CLOCK);
+        return new PhotoService(fakePresigner(), bucket, "ap-northeast-2", CLOCK, mock(PhotoUploadService.class));
     }
 
     @Test
@@ -44,12 +47,13 @@ class PhotoServiceTest {
     void presignReportSuccess() {
         PhotoService service = service("geuneul-photos-test");
         PhotoPresignResponse res = service.presign(
-                new PhotoPresignRequest("image/jpeg", 2_000_000L, "report"), false);
+                new PhotoPresignRequest("image/jpeg", 2_000_000L, "report"), null, "x:test");
 
         assertThat(res.key()).startsWith("report/").endsWith(".jpg");
         assertThat(res.uploadUrl()).startsWith("https://geuneul-photos-test.s3.ap-northeast-2.amazonaws.com/");
         assertThat(res.uploadUrl()).contains(res.key());
         assertThat(res.uploadUrl()).contains("X-Amz-Signature=");
+        assertThat(res.uploadUrl()).contains("if-none-match");
         assertThat(res.objectUrl())
                 .isEqualTo("https://geuneul-photos-test.s3.ap-northeast-2.amazonaws.com/" + res.key());
         assertThat(res.expiresAt()).isEqualTo(CLOCK.instant().atOffset(ZoneOffset.UTC).plusMinutes(2));
@@ -59,7 +63,7 @@ class PhotoServiceTest {
     @DisplayName("purpose 미지정이면 기본 report로 취급된다")
     void defaultsToReportPurpose() {
         PhotoPresignResponse res = service("bucket").presign(
-                new PhotoPresignRequest("image/png", 100L, null), false);
+                new PhotoPresignRequest("image/png", 100L, null), null, "x:test");
         assertThat(res.key()).startsWith("report/").endsWith(".png");
     }
 
@@ -67,7 +71,8 @@ class PhotoServiceTest {
     @DisplayName("review 용도 · 인증됨이면 review/ 접두 키로 발급된다")
     void presignReviewAuthenticated() {
         PhotoPresignResponse res = service("bucket").presign(
-                new PhotoPresignRequest("image/webp", 500L, "review"), true);
+                new PhotoPresignRequest("image/webp", 500L, "review"),
+                new JwtService.AuthPrincipal(1L, Role.USER), "x:test");
         assertThat(res.key()).startsWith("review/").endsWith(".webp");
     }
 
@@ -75,7 +80,7 @@ class PhotoServiceTest {
     @DisplayName("review 용도 · 미인증이면 401")
     void presignReviewUnauthenticatedIs401() {
         PhotoService service = service("bucket");
-        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", 100L, "review"), false))
+        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", 100L, "review"), null, "x:test"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(UNAUTHORIZED));
     }
@@ -84,7 +89,7 @@ class PhotoServiceTest {
     @DisplayName("화이트리스트 밖 contentType이면 400")
     void unsupportedContentTypeIs400() {
         PhotoService service = service("bucket");
-        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/gif", 100L, "report"), false))
+        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/gif", 100L, "report"), null, "x:test"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(BAD_REQUEST));
     }
@@ -94,7 +99,7 @@ class PhotoServiceTest {
     void tooLargeIs400() {
         PhotoService service = service("bucket");
         long tooLarge = 8L * 1024 * 1024 + 1;
-        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", tooLarge, "report"), false))
+        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", tooLarge, "report"), null, "x:test"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(BAD_REQUEST));
     }
@@ -103,7 +108,7 @@ class PhotoServiceTest {
     @DisplayName("잘못된 purpose 값이면 400")
     void invalidPurposeIs400() {
         PhotoService service = service("bucket");
-        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", 100L, "flag"), false))
+        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", 100L, "flag"), null, "x:test"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(BAD_REQUEST));
     }
@@ -112,7 +117,7 @@ class PhotoServiceTest {
     @DisplayName("버킷 미설정이면 IllegalStateException(부팅은 되지만 호출 시점에 실패, JwtService와 동일 패턴)")
     void missingBucketFailsAtCallTime() {
         PhotoService service = service("");
-        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", 100L, "report"), false))
+        assertThatThrownBy(() -> service.presign(new PhotoPresignRequest("image/jpeg", 100L, "report"), null, "x:test"))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -120,8 +125,8 @@ class PhotoServiceTest {
     @DisplayName("서로 다른 요청은 서로 다른 키(uuid)를 받는다 — 충돌 없는 랜덤 키")
     void keysAreUnique() {
         PhotoService service = service("bucket");
-        PhotoPresignResponse a = service.presign(new PhotoPresignRequest("image/jpeg", 100L, "report"), false);
-        PhotoPresignResponse b = service.presign(new PhotoPresignRequest("image/jpeg", 100L, "report"), false);
+        PhotoPresignResponse a = service.presign(new PhotoPresignRequest("image/jpeg", 100L, "report"), null, "x:test");
+        PhotoPresignResponse b = service.presign(new PhotoPresignRequest("image/jpeg", 100L, "report"), null, "x:test");
         assertThat(a.key()).isNotEqualTo(b.key());
     }
 

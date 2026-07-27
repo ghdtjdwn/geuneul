@@ -236,9 +236,10 @@ Browser / PWA
 
 ## 11. API 찾아보기
 
-프론트엔드는 `/api/*` BFF 경로를 사용하고, 백엔드는 Swagger에서 요청·응답 스키마를 확인할 수 있다.
+프론트엔드는 `/api/*` BFF 경로를 사용한다. Swagger/OpenAPI는 운영에서 비활성화하고 로컬에서
+`SPRINGDOC_ENABLED=true`로 실행할 때만 요청·응답 스키마 확인에 사용한다.
 
-- 라이브 Swagger: [swagger-ui.html](https://d2pedv974beobb.cloudfront.net/swagger-ui.html)
+- 로컬 Swagger: `http://localhost:8080/swagger-ui.html` (`SPRINGDOC_ENABLED=true` 필요)
 - 라이브 헬스 체크: [actuator/health](https://d2pedv974beobb.cloudfront.net/actuator/health)
 - 세부 아키텍처와 ETL: [architecture.md](./architecture.md)
 - 기술 선택의 근거: [ADR 색인](./adr/README.md)

@@ -17,20 +17,20 @@ class ProxyClientResolverTest {
     }
 
     @Nested
-    @DisplayName("시크릿 미설정(현재/개발) — 기존 호환")
+    @DisplayName("시크릿 미설정 — 전달 헤더를 신뢰하지 않는 fail-safe")
     class NoSecret {
         private final ProxyClientResolver r = withSecret("");
 
         @Test
-        @DisplayName("XFF 최좌측을 키로 쓴다")
-        void leftmostXff() {
-            assertThat(r.resolve(null, null, "203.0.113.7, 10.0.0.1", "10.9.9.9")).isEqualTo("x:203.0.113.7");
+        @DisplayName("XFF를 무시하고 TCP 피어를 키로 쓴다")
+        void ignoresXff() {
+            assertThat(r.resolve(null, null, "203.0.113.7, 10.0.0.1", "10.9.9.9")).isEqualTo("x:10.9.9.9");
         }
 
         @Test
         @DisplayName("시크릿 미설정이면 X-Client-Ip/X-Proxy-Auth가 있어도 신뢰하지 않는다")
         void ignoresClientIpWithoutConfiguredSecret() {
-            assertThat(r.resolve("anything", "1.2.3.4", "203.0.113.7", "10.9.9.9")).isEqualTo("x:203.0.113.7");
+            assertThat(r.resolve("anything", "1.2.3.4", "203.0.113.7", "10.9.9.9")).isEqualTo("x:10.9.9.9");
         }
 
         @Test

@@ -1,10 +1,10 @@
 output "alb_url" {
-  description = "앱 공개 URL (health: /actuator/health, swagger: /swagger-ui.html)"
+  description = "ALB origin URL (public health: /actuator/health; Swagger is production-disabled)"
   value       = "http://${aws_lb.app.dns_name}"
 }
 
 output "https_url" {
-  description = "CloudFront 기본 도메인 HTTPS URL (공유용 신뢰 링크 — health: /actuator/health, swagger: /swagger-ui.html)"
+  description = "CloudFront 기본 도메인 HTTPS URL (public health: /actuator/health; Swagger is production-disabled)"
   value       = "https://${aws_cloudfront_distribution.app.domain_name}"
 }
 

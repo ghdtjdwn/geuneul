@@ -5,6 +5,7 @@ import com.geuneul.domain.auth.TrustScoreService;
 import com.geuneul.domain.auth.User;
 import com.geuneul.domain.auth.UserRepository;
 import com.geuneul.domain.photo.PhotoService;
+import com.geuneul.domain.photo.PhotoUploadService;
 import com.geuneul.domain.place.PlaceRepository;
 import com.geuneul.domain.review.dto.ReviewCreateRequest;
 import com.geuneul.domain.review.dto.ReviewListResponse;
@@ -12,7 +13,6 @@ import com.geuneul.domain.review.dto.ReviewResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -46,6 +46,7 @@ class ReviewServiceTest {
     private PlaceRepository placeRepository;
     private UserRepository userRepository;
     private TrustScoreService trustScoreService;
+    private PhotoUploadService photoUploadService;
     private ReviewService reviewService;
 
     @BeforeEach
@@ -56,12 +57,14 @@ class ReviewServiceTest {
         trustScoreService = mock(TrustScoreService.class);
         // 실 Jackson 3 ObjectMapper — photos<->JSON 직렬화 계약을 실제로 태워 검증한다.
         // PhotoService는 버킷 미설정(빈 문자열)이라 presignGet이 저장 URL을 그대로 통과시킨다(N1 passthrough 분기).
-        PhotoService photoService = new PhotoService(mock(S3Presigner.class), "", "ap-northeast-2", Clock.systemUTC());
+        photoUploadService = mock(PhotoUploadService.class);
+        PhotoService photoService = new PhotoService(mock(S3Presigner.class), "", "ap-northeast-2", Clock.systemUTC(), photoUploadService);
         reviewService = new ReviewService(reviewRepository, placeRepository, userRepository,
-                trustScoreService, JsonMapper.builder().build(), photoService);
+                trustScoreService, JsonMapper.builder().build(), photoService, photoUploadService);
 
         when(placeRepository.existsByIdAndDeletedAtIsNull(1L)).thenReturn(true);
         when(userRepository.findById(10L)).thenReturn(Optional.of(user(10L, "그늘러버")));
+        when(reviewRepository.lockUserPlace(10L, 1L)).thenReturn(1);
     }
 
     private static User user(long id, String nickname) {
@@ -85,7 +88,7 @@ class ReviewServiceTest {
     @DisplayName("신규 후기: 기존 없음 → save 후 응답 조립(사진 JSON 왕복 포함)")
     void createsNewReview() {
         when(reviewRepository.findByUserIdAndPlaceId(10L, 1L)).thenReturn(Optional.empty());
-        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ReviewResponse response = reviewService.create(10L,
                 new ReviewCreateRequest(1L, 5, " 시원하고 좋아요 ", List.of("https://img/1.jpg", "https://img/2.jpg")));
@@ -94,7 +97,7 @@ class ReviewServiceTest {
         assertThat(response.comment()).isEqualTo("시원하고 좋아요"); // 공백 정규화
         assertThat(response.photos()).containsExactly("https://img/1.jpg", "https://img/2.jpg");
         assertThat(response.authorNickname()).isEqualTo("그늘러버");
-        verify(reviewRepository).save(any(Review.class));
+        verify(reviewRepository).saveAndFlush(any(Review.class));
         verify(trustScoreService).recalculate(10L); // 후기도 trust_score 활동 신호(TrustScore 근거)
     }
 
@@ -103,14 +106,44 @@ class ReviewServiceTest {
     void rewriteUpdatesExisting() {
         Review existing = Review.of(10L, 1L, (short) 3, "그저 그래요", null);
         when(reviewRepository.findByUserIdAndPlaceId(10L, 1L)).thenReturn(Optional.of(existing));
-        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ReviewResponse response = reviewService.create(10L, new ReviewCreateRequest(1L, 5, "역시 최고", null));
 
         assertThat(response.rating()).isEqualTo(5);
         assertThat(response.comment()).isEqualTo("역시 최고");
         assertThat(response.photos()).isEmpty();
-        verify(reviewRepository).save(eq(existing)); // 같은 인스턴스를 갱신(신규 Review.of 아님)
+        verify(reviewRepository).saveAndFlush(eq(existing)); // 같은 인스턴스를 갱신(신규 Review.of 아님)
+    }
+
+    @Test
+    @DisplayName("같은 후기의 기존 사진 URL은 유지할 수 있지만 claim을 다시 소비하지 않는다")
+    void rewriteRetainsExistingPhotoWithoutReconsumingClaim() {
+        Review existing = Review.of(10L, 1L, (short) 3, "기존",
+                "[\"https://img/existing.jpg\"]");
+        when(reviewRepository.findByUserIdAndPlaceId(10L, 1L)).thenReturn(Optional.of(existing));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReviewResponse response = reviewService.create(10L,
+                new ReviewCreateRequest(1L, 4, "수정", List.of("https://img/existing.jpg")));
+
+        assertThat(response.photos()).containsExactly("https://img/existing.jpg");
+        verify(photoUploadService).validateReview(List.of(), 10L);
+        verify(photoUploadService).detachReview(List.of(), 10L);
+    }
+
+    @Test
+    @DisplayName("후기 사진 A를 B로 교체하면 B를 consume하고 A를 같은 transaction에서 detached 전이한다")
+    void rewriteDetachesRemovedPhoto() {
+        Review existing = Review.of(10L, 1L, (short) 3, "기존", "[\"https://img/a.jpg\"]");
+        when(reviewRepository.findByUserIdAndPlaceId(10L, 1L)).thenReturn(Optional.of(existing));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        reviewService.create(10L,
+                new ReviewCreateRequest(1L, 4, "교체", List.of("https://img/b.jpg")));
+
+        verify(photoUploadService).validateReview(List.of("https://img/b.jpg"), 10L);
+        verify(photoUploadService).detachReview(List.of("https://img/a.jpg"), 10L);
     }
 
     @Test
@@ -121,7 +154,7 @@ class ReviewServiceTest {
         assertThatThrownBy(() -> reviewService.create(10L, new ReviewCreateRequest(999L, 5, null, null)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("404");
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
         verify(trustScoreService, never()).recalculate(anyLong());
     }
 
@@ -139,31 +172,11 @@ class ReviewServiceTest {
     @DisplayName("빈 코멘트는 null로 정규화된다")
     void blankCommentNormalizesToNull() {
         when(reviewRepository.findByUserIdAndPlaceId(10L, 1L)).thenReturn(Optional.empty());
-        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ReviewResponse response = reviewService.create(10L, new ReviewCreateRequest(1L, 4, "   ", null));
 
         assertThat(response.comment()).isNull();
-    }
-
-    @Test
-    @DisplayName("동시 신규 작성으로 UNIQUE 충돌이 나면 기존 후기를 찾아 갱신해 반환한다")
-    void uniqueRaceUpdatesExistingReview() {
-        Review existing = Review.of(10L, 1L, (short) 3, "먼저 저장됨", null);
-        when(reviewRepository.findByUserIdAndPlaceId(10L, 1L))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(existing));
-        when(reviewRepository.save(any(Review.class)))
-                .thenThrow(new DataIntegrityViolationException("uq_reviews_user_place"))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-        ReviewResponse response = reviewService.create(10L,
-                new ReviewCreateRequest(1L, 5, "동시 요청의 최신 내용", List.of("https://img/1.jpg")));
-
-        assertThat(response.rating()).isEqualTo(5);
-        assertThat(response.comment()).isEqualTo("동시 요청의 최신 내용");
-        assertThat(existing.getRating()).isEqualTo(5);
-        verify(reviewRepository, org.mockito.Mockito.times(2)).save(any(Review.class));
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.geuneul.domain.flag.dto.FlagResolveRequest;
 import com.geuneul.domain.flag.dto.FlagResponse;
 import com.geuneul.domain.report.Report;
 import com.geuneul.domain.report.ReportRepository;
+import com.geuneul.domain.report.ReportDerivedCacheService;
 import com.geuneul.domain.report.ReportType;
 import com.geuneul.domain.review.Review;
 import com.geuneul.domain.review.ReviewRepository;
@@ -49,13 +50,16 @@ class FlagServiceTest {
     private ReportRepository reportRepository;
     private ReviewRepository reviewRepository;
     private FlagService flagService;
+    private ReportDerivedCacheService reportDerivedCacheService;
 
     @BeforeEach
     void setUp() {
         flagRepository = mock(FlagRepository.class);
         reportRepository = mock(ReportRepository.class);
         reviewRepository = mock(ReviewRepository.class);
-        flagService = new FlagService(flagRepository, reportRepository, reviewRepository, FIXED_CLOCK);
+        reportDerivedCacheService = mock(ReportDerivedCacheService.class);
+        flagService = new FlagService(flagRepository, reportRepository, reviewRepository,
+                reportDerivedCacheService, FIXED_CLOCK);
     }
 
     @Test
@@ -201,13 +205,17 @@ class FlagServiceTest {
     @DisplayName("PENDING 신고를 RESOLVED로 처리하면 resolvedAt이 채워진다")
     void resolvesFlag() {
         Flag flag = Flag.create(FlagTargetType.REPORT, 1L, 10L, FlagReason.SPAM, null);
+        Report report = Report.anonymous(5L, ReportType.COOL, null, true, null);
         when(flagRepository.findById(1L)).thenReturn(Optional.of(flag));
+        when(reportRepository.findById(1L)).thenReturn(Optional.of(report));
         when(flagRepository.save(any(Flag.class))).thenAnswer(inv -> inv.getArgument(0));
 
         FlagResponse response = flagService.resolve(1L, new FlagResolveRequest(FlagStatus.RESOLVED));
 
         assertThat(response.status()).isEqualTo("RESOLVED");
         assertThat(response.resolvedAt()).isEqualTo(OffsetDateTime.now(FIXED_CLOCK));
+        assertThat(report.isHidden()).isTrue();
+        verify(reportDerivedCacheService).evictAfterCommit(5L);
     }
 
     @Test

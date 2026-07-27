@@ -52,6 +52,10 @@ public class User {
     @Column(nullable = false, length = 16)
     private Role role = Role.USER;
 
+    /** Incremented on logout so every previously issued JWT becomes invalid across all server instances. */
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -69,6 +73,7 @@ public class User {
         u.profileImage = profileImage;
         u.trustScore = 0;
         u.role = Role.USER;
+        u.tokenVersion = 0;
         return u;
     }
 
@@ -123,6 +128,14 @@ public class User {
 
     public Role getRole() {
         return role;
+    }
+
+    public long getTokenVersion() {
+        return tokenVersion;
+    }
+
+    public void revokeSessions() {
+        tokenVersion = Math.addExact(tokenVersion, 1);
     }
 
     public OffsetDateTime getCreatedAt() {

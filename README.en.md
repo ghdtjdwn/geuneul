@@ -11,12 +11,11 @@
 </p>
 
 [![API](https://img.shields.io/badge/API-live_health-17957e)](https://d2pedv974beobb.cloudfront.net/actuator/health)
-[![Swagger](https://img.shields.io/badge/API-Swagger-85EA2D?logo=swagger&logoColor=black)](https://d2pedv974beobb.cloudfront.net/swagger-ui.html)
 
 [![Public Data](https://img.shields.io/badge/Public_data-150k%2B_POI-2f9e44)](#data-etl)
 [![Radius p95](https://img.shields.io/badge/Radius_p95-1.35s_local_300k-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
-[![Coverage](https://img.shields.io/badge/JaCoCo-86.8%25-17957e)](#technology)
-[![ADR](https://img.shields.io/badge/ADR-30-informational)](./docs/adr/README.md)
+[![Coverage](https://img.shields.io/badge/JaCoCo-87.22%25-17957e)](#technology)
+[![ADR](https://img.shields.io/badge/ADR-31-informational)](./docs/adr/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](./LICENSE)
 
 [![CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml)
@@ -52,6 +51,10 @@ On mobile, the map and bottom sheet support nearby discovery, while scenario rec
 - Spatial queries stay in the database. Radius search uses `ST_DWithin`, nearest-neighbor search uses kNN `<->`, and viewport search uses GiST indexes. Low-volume production k6 tuning reduced radius-search p95 from 2.68s to about 1.4s ([ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)). The current code was reverified at 1.35s p95 with no failed requests against a fingerprinted local 300,000-place snapshot; the environments differ, so no direct improvement ratio is claimed ([ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - Idempotent ETL and geocoding use the `source + source_external_id` natural key, so a batch can be run again without duplicates. The service stores 60,297 cooling shelters, 52,334 public toilets, 3,551 libraries, and commercial café/study-space data. Missing WGS84 coordinates are completed with Kakao geocoding and cached to avoid repeated requests. The V20 run ledger tracks retry lineage and freshness without source payloads, while partial API responses and remote CSV digest mismatches fail before database mutation ([ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - Real-time, geo-temporal UGC scoring combines expiring reports and durable reviews with trust weighting in `survival_score`. Report surges flow from PostgreSQL `LISTEN/NOTIFY` through multi-instance fan-out to SSE. Saved-place notifications use `INSERT … RETURNING` to send exactly once ([ADR-0016](./docs/adr/0016-realtime-report-surge-listen-notify-sse.md), [ADR-0026](./docs/adr/0026-bookmark-status-change-notification.md)).
+- Server-validated security boundaries use conditional S3 writes and one-time claims before UGC can reference a photo. Bounded cleanup handles expired unused objects and photos detached from reviews only after rechecking current references. Login and logout serialize on the same user row so database token-version revocation cannot be overwritten, while Redis shares rate limits across ECS instances ([ADR-0031](./docs/adr/0031-security-boundaries-session-upload-rate-limit.md)).
+
+Reviews and photo claims commit or roll back in one transaction. Claimless photos saved before V21 can be removed from existing reviews but remain outside automatic cleanup. PostgreSQL locks, cache generations, and database time provide the consistency boundaries for concurrent first OAuth login, late stale readers, and cleanup clock skew.
+Report security issues through [GitHub private vulnerability reporting](./.github/SECURITY.md), not a public issue.
 
 > Stack: Spring Boot 4 · Java 21 · PostgreSQL + PostGIS · Redis · AWS ECS Fargate · Terraform · Next.js PWA
 
@@ -101,8 +104,8 @@ Public standard datasets are loaded idempotently: repeating the same source perf
 # 1) Infrastructure — PostGIS + Redis
 docker compose up -d
 
-# 2) Backend — http://localhost:8080/swagger-ui.html
-cd backend && ./gradlew bootRun
+# 2) Backend — API documentation is enabled explicitly for local development only
+cd backend && SPRINGDOC_ENABLED=true ./gradlew bootRun
 
 # 3) Frontend — http://localhost:3000
 # Without a Kakao JavaScript key, the map is a placeholder but API data still works.
@@ -148,16 +151,16 @@ GET /alerts/stream
 | Area | Stack |
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS (Hibernate Spatial + JTS) · Flyway · Redis |
-| Frontend | Next.js 16 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
+| Frontend | Next.js 16.2.12 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
 | Infrastructure | AWS ECS Fargate · RDS · Terraform · GitHub Actions with OIDC · ECR · ALB · Vercel |
-| Quality and operations | Testcontainers 2 with real PostGIS (506 tests, 0 skipped) · JaCoCo 86.8% line coverage with a 70% gate · DB/request-seeded k6 JSON summaries · gitleaks · Swagger |
+| Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate · DB/request-seeded k6 JSON summaries · gitleaks · CodeQL · Dependabot · local-only Swagger |
 
 ## Documentation
 
 - Product scope, ERD, and API contract: [docs/SPEC.md](./docs/SPEC.md)
 - Complete feature, implementation, and stack guide: [docs/FEATURES.md](./docs/FEATURES.md) (Korean)
 - Architecture and screenshots: [docs/architecture.md](./docs/architecture.md)
-- Technical decision records: [docs/adr/](./docs/adr) ([index](./docs/adr/README.md), 0001–0030)
+- Technical decision records: [docs/adr/](./docs/adr) ([index](./docs/adr/README.md), 0001–0031)
 - AWS deployment: [DEPLOY.md](./DEPLOY.md)
 - Design and API reference: [docs/design-brief.md](./docs/design-brief.md)
 

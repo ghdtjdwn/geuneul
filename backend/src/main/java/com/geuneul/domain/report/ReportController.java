@@ -26,7 +26,7 @@ import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
  * 휘발성 제보 API (docs/SPEC.md §9). 익명 제보 허용 + 장소별 최근 제보 조회.
  * POST /reports는 permitAll(SecurityConfig)이라 로그인은 선택이다 — Authorization 헤더가 있으면
  * {@code principal}이 채워져 trust_score 가중 대상이 되고(P2), 없으면 기존과 동일하게 완전 익명이다.
- * 사진 presign·신고 큐는 후속.
+ * 사진은 presign claim의 소유자·용도와 S3 업로드 완료를 저장 전에 검증한다. 신고 큐는 후속.
  */
 @Tag(name = "Reports", description = "휘발성 상태 제보 — 익명 허용, 로그인 시 신뢰도 가중, expires_at 지나면 제외")
 @RestController
@@ -51,10 +51,11 @@ public class ReportController {
     @ResponseStatus(HttpStatus.CREATED)
     public ReportResponse create(@AuthenticationPrincipal JwtService.AuthPrincipal principal,
                                  @Valid @RequestBody ReportCreateRequest request, HttpServletRequest http) {
-        if (!rateLimiter.tryAcquire(clientResolver.resolve(http))) {
+        String clientKey = clientResolver.resolve(http);
+        if (!rateLimiter.tryAcquire(clientKey)) {
             throw new ResponseStatusException(TOO_MANY_REQUESTS, "제보가 너무 잦아요. 잠시 후 다시 시도해 주세요.");
         }
-        return reportService.create(principal, request);
+        return reportService.create(principal, request, clientKey);
     }
 
     @Operation(summary = "장소의 최근 제보", description = "유효(미만료) 제보 최신순 최대 20개.")

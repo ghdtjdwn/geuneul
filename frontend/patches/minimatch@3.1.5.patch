@@ -1,0 +1,8 @@
+diff --git a/minimatch.js b/minimatch.js
+index 2e4a058a130dceebf83a7bd435f5d22b765ac836..e4f470e5b7c34e492bf7f4dce813654b2d4ccb62 100644
+--- a/minimatch.js
++++ b/minimatch.js
+@@ -10 +10,2 @@ var GLOBSTAR = minimatch.GLOBSTAR = Minimatch.GLOBSTAR = {}
+-var expand = require('brace-expansion')
++// brace-expansion >=5 exposes its CommonJS API as { expand } instead of a callable export.
++var expand = require('brace-expansion').expand

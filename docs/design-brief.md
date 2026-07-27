@@ -1,7 +1,8 @@
 # 그늘 (Geuneul) — MVP 디자인·API 계약 스냅샷
 
 > **기록 시점: 2026-07 초.** 이 문서는 첫 4화면을 구현할 때의 디자인·API 계약 기록이다. 이후 로그인·후기·사진·알림·경로·데스크톱 UI가 추가됐으므로 현재 제품 기능이나 공개 API의 단일 출처로 사용하지 않는다.
-> 현재 상태는 [루트 README](../README.md), [아키텍처](./architecture.md), API는 라이브 Swagger를 기준으로 한다.
+> 현재 상태는 [루트 README](../README.md)와 [아키텍처](./architecture.md)를 기준으로 한다. API 문서는 운영에서
+> 비활성화하며 로컬에서 `SPRINGDOC_ENABLED=true`로 실행할 때 Swagger로 확인한다.
 
 ## 1. 제품 한 줄
 

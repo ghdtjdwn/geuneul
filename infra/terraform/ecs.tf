@@ -35,6 +35,8 @@ resource "aws_ecs_task_definition" "app" {
       { name = "REDIS_PORT", value = "6379" },
       { name = "S3_BUCKET_NAME", value = aws_s3_bucket.photos.bucket }, # P2 사진 presign(PhotoService)
       { name = "AWS_REGION", value = var.aws_region },                  # S3Presigner 리전 — ECS가 자동 주입 안 함
+      { name = "SPRINGDOC_ENABLED", value = "false" },                  # 공개 운영 Swagger/OpenAPI는 fail-closed
+      { name = "PHOTO_CLEANUP_ENABLED", value = "true" },               # 만료·미사용 upload claim/object bounded cleanup
       # AI 요약(P3, 곁다리 — ADR-0010) 비-시크릿 설정. base-url/model은 시크릿이 아니라 SSM이 아닌 평문
       # environment로 둔다(application.yml의 ai.summary.base-url/model 기본값과 동일). 라이브 태스크데프
       # 리비전은 container_definitions가 ignore_changes라 이 apply만으론 반영되지 않고(기존 값이 없으면

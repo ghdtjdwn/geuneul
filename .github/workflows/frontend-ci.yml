@@ -44,6 +44,9 @@ jobs:
         # pnpm 11 은 CI 에서 미빌드 스크립트를 하드 에러로 처리하므로 명시적으로 무시.
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Dependency audit
+        run: pnpm audit:dependencies
+
       - name: Typecheck
         run: pnpm typecheck
 

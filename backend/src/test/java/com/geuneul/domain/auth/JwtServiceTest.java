@@ -25,6 +25,7 @@ class JwtServiceTest {
         User u = mock(User.class);
         when(u.getId()).thenReturn(id);
         when(u.getRole()).thenReturn(role);
+        when(u.getTokenVersion()).thenReturn(7L);
         return u;
     }
 
@@ -37,6 +38,7 @@ class JwtServiceTest {
         JwtService.AuthPrincipal principal = jwt.parse(token);
         assertThat(principal.userId()).isEqualTo(42L);
         assertThat(principal.role()).isEqualTo(Role.USER);
+        assertThat(principal.tokenVersion()).isEqualTo(7L);
     }
 
     @Test

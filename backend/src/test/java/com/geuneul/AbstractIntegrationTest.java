@@ -32,6 +32,7 @@ import org.testcontainers.utility.DockerImageName;
 // 컨텍스트 수와 무관하게 접속 총량을 억제하도록 풀을 작게 캡한다(프로덕션 풀은 무영향 — 테스트 프로퍼티만).
 @org.springframework.test.context.TestPropertySource(properties = {
         "geuneul.realtime.enabled=false",
+        "geuneul.photo-cleanup.enabled=false",
         "spring.datasource.hikari.maximum-pool-size=4"
 })
 @org.springframework.context.annotation.Import({

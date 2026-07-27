@@ -48,9 +48,10 @@ public class PhotoController {
     public PhotoPresignResponse presign(@Valid @RequestBody PhotoPresignRequest request,
                                         @AuthenticationPrincipal JwtService.AuthPrincipal principal,
                                         HttpServletRequest http) {
-        if (!rateLimiter.tryAcquire(clientResolver.resolve(http))) {
+        String clientKey = clientResolver.resolve(http);
+        if (!rateLimiter.tryAcquire(clientKey)) {
             throw new ResponseStatusException(TOO_MANY_REQUESTS, "사진 업로드 요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.");
         }
-        return photoService.presign(request, principal != null);
+        return photoService.presign(request, principal, clientKey);
     }
 }

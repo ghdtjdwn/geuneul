@@ -56,11 +56,10 @@ class AdminFlagControllerTest {
 
     private void stubToken(String token, Role role) {
         given(jwtService.parse(token)).willReturn(new JwtService.AuthPrincipal(10L, role));
-        if (role == Role.ADMIN) {
-            User admin = mock(User.class);
-            given(admin.getRole()).willReturn(Role.ADMIN);
-            given(userRepository.findById(10L)).willReturn(Optional.of(admin));
-        }
+        User user = mock(User.class);
+        given(user.getRole()).willReturn(role);
+        given(user.getTokenVersion()).willReturn(0L);
+        given(userRepository.findById(10L)).willReturn(Optional.of(user));
     }
 
     private static FlagPendingListResponse samplePage() {

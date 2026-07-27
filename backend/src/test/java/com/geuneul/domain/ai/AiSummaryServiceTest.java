@@ -1,6 +1,7 @@
 package com.geuneul.domain.ai;
 
 import com.geuneul.domain.report.Report;
+import com.geuneul.domain.report.ReportDerivedCacheService;
 import com.geuneul.domain.report.ReportRepository;
 import com.geuneul.domain.report.ReportType;
 import org.junit.jupiter.api.DisplayName;
@@ -36,7 +37,15 @@ class AiSummaryServiceTest {
 
     private final ReportRepository reportRepository = mock(ReportRepository.class);
     private final ChatCompletionClient client = mock(ChatCompletionClient.class);
-    private final AiSummaryService service = new AiSummaryService(reportRepository, client, CLOCK);
+    private final ReportDerivedCacheService cache = passThroughCache();
+    private final AiSummaryService service = new AiSummaryService(reportRepository, client, cache, CLOCK);
+
+    private static ReportDerivedCacheService passThroughCache() {
+        ReportDerivedCacheService cache = mock(ReportDerivedCacheService.class);
+        when(cache.cached(anyString(), org.mockito.ArgumentMatchers.anyLong(), any(), any()))
+                .thenAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(2)).get());
+        return cache;
+    }
 
     @Test
     @DisplayName("유효 제보가 없으면 AI를 호출하지 않고 empty를 반환한다(비용 방어)")

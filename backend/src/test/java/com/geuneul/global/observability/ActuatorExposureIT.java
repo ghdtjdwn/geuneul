@@ -44,4 +44,16 @@ class ActuatorExposureIT extends AbstractIntegrationTest {
     void envIsNeverInTheAllowlist() throws Exception {
         mvc.perform(get("/actuator/env")).andExpect(status().isNotFound());
     }
+
+    @Test
+    @DisplayName("Swagger UI는 기본 설정(SPRINGDOC_ENABLED 미설정)에서 노출되지 않는다")
+    void swaggerUiIsNotExposedByDefault() throws Exception {
+        mvc.perform(get("/swagger-ui.html")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("OpenAPI 문서는 기본 설정(SPRINGDOC_ENABLED 미설정)에서 노출되지 않는다")
+    void openApiDocsAreNotExposedByDefault() throws Exception {
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isNotFound());
+    }
 }

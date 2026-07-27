@@ -3,7 +3,7 @@
 > **Live:** https://geuneul.vercel.app
 > 루트 README에는 제품·백엔드·인프라 전체 개요를, 이 문서에는 Next.js 클라이언트의 실행과 구조만 남긴다.
 
-Next.js 16 App Router 기반 PWA입니다. 브라우저는 같은 오리진의 `/api/*` Route Handler만 호출하고, 서버 측 BFF가 CloudFront를 거쳐 Spring Boot API에 연결합니다. 백엔드 주소와 인증 비밀은 브라우저 번들에 포함하지 않습니다.
+Next.js 16.2.12 App Router 기반 PWA입니다. 브라우저는 같은 오리진의 `/api/*` Route Handler만 호출하고, 서버 측 BFF가 CloudFront를 거쳐 Spring Boot API에 연결합니다. 백엔드 주소와 인증 비밀은 브라우저 번들에 포함하지 않습니다.
 
 ## 제공 기능
 

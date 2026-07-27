@@ -12,6 +12,15 @@ import java.util.Optional;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
+    /** Transaction-scoped lock also covers the no-row gap before the first review insert. */
+    @Query(value = """
+            SELECT 1
+            FROM (SELECT pg_advisory_xact_lock(
+                hashtextextended(CONCAT(CAST(:userId AS text), ':', CAST(:placeId AS text)), 0)
+            )) AS locked
+            """, nativeQuery = true)
+    int lockUserPlace(@Param("userId") long userId, @Param("placeId") long placeId);
+
     /** 같은 유저·같은 장소의 기존 후기 — upsert 판정(정책: 장소당 1건, Review 클래스 주석 참고). */
     Optional<Review> findByUserIdAndPlaceId(long userId, long placeId);
 

@@ -245,9 +245,10 @@ export async function deleteNotificationRule(id: number): Promise<void> {
   if (!res.ok) throw await toApiError(res);
 }
 
-// 로그아웃 — 세션 쿠키 삭제(서버 무상태).
+// 로그아웃 — 서버 token_version 폐기 성공 후 세션 쿠키 삭제.
 export async function logout(): Promise<void> {
-  await fetch(`/api/auth/logout`, { method: "POST", signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS) });
+  const res = await fetch(`/api/auth/logout`, { method: "POST", signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS) });
+  if (!res.ok) throw await toApiError(res);
 }
 
 // 신고 접수(C1) — 로그인 필요. 201=접수, 409=이미 신고한 항목, 404=대상 없음, 401=비로그인.
@@ -368,7 +369,8 @@ export async function presignPhoto(params: {
 export async function uploadPhotoToS3(presigned: PhotoPresignResult, file: File): Promise<void> {
   const res = await fetch(presigned.uploadUrl, {
     method: "PUT",
-    headers: { "content-type": file.type },
+    // Must match PhotoService's signed conditional create header; an existing key returns S3 412 instead of overwrite.
+    headers: { "content-type": file.type, "if-none-match": "*" },
     body: file,
   });
   if (!res.ok) throw new Error(`사진 업로드에 실패했어요 (${res.status})`);

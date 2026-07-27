@@ -12,7 +12,7 @@
 ```mermaid
 flowchart LR
   subgraph client["브라우저 · PWA"]
-    UI["Next.js 16 App Router<br/>Kakao Maps · Serwist SW<br/>TanStack Query"]
+    UI["Next.js 16.2.12 App Router<br/>Kakao Maps · Serwist SW<br/>TanStack Query"]
   end
 
   subgraph vercel["Vercel"]
@@ -26,8 +26,8 @@ flowchart LR
       API["Spring Boot 4 · Java 21<br/>반경 ST_DWithin · kNN &lt;-&gt; (GiST)<br/>survival_score (SQL 뷰 + 순수 함수)<br/>시나리오 추천 2단 랭킹<br/>멱등 ETL + 지오코딩"]
     end
     PG[("PostgreSQL + PostGIS<br/>RDS · geometry(Point,4326)")]
-    REDIS[("ElastiCache Redis<br/>날씨 TTL · 조회 캐시")]
-    S3[("S3<br/>제보·후기 사진<br/>presigned URL")]
+    REDIS[("ElastiCache Redis<br/>날씨 TTL · 조회 캐시<br/>공유 레이트리밋")]
+    S3[("private S3<br/>conditional PUT · HeadObject<br/>일회성 claim · bounded cleanup")]
     EB["EventBridge → ECS RunTask<br/>공공데이터 주기 동기화<br/>(ADR-0011)"]
   end
 
@@ -53,6 +53,10 @@ flowchart LR
 - **동일 오리진 BFF** — 브라우저는 항상 Vercel 위 `/api/*` 서버 프록시만 호출한다. ALB(http)·CORS 제약을 동시에 회피(백엔드 CORS 불필요, [ADR-0004](./adr/0004-frontend-same-origin-proxy.md)). 외부 키(Kakao/KMA/AI)도 서버에만 있다.
 - **공간 연산은 DB 레이어** — 반경(`ST_DWithin`)·최근접(kNN `<->`)·bounds는 GiST 인덱스로, 시공간 집계(`place_report_signals`)는 SQL 뷰로 돈다. 무거운 집계는 DB, 자주 튜닝하는 가중치 정책만 순수 Java 함수로 분리([ADR-0007](./adr/0007-survival-score-sql-signals-java-compose.md)).
 - **실시간** — 제보 INSERT → Postgres `LISTEN/NOTIFY` → 멀티 인스턴스 팬아웃 → SSE 스트림 / Web Push. 과설계(Kafka) 없이 이미 있는 Postgres·Redis로([ADR-0016](./adr/0016-realtime-report-surge-listen-notify-sse.md)).
+- **보안 경계** — BFF가 증명한 client identity로 Redis 레이트리밋을 인스턴스 간 공유한다. 사진은 presign 기록의
+  소유자·용도와 private S3 object 완료 상태를 검증한 일회성 claim만 UGC가 참조하며, 만료 미사용 object는 lease 기반
+  bounded job이 정리한다. JWT login/logout은 같은 user row lock으로 직렬화하고 DB `token_version`으로 즉시
+  폐기할 수 있다([ADR-0031](./adr/0031-security-boundaries-session-upload-rate-limit.md)).
 
 ## 데이터 · ETL
 

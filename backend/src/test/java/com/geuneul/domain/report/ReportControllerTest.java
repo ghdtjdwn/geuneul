@@ -68,7 +68,7 @@ class ReportControllerTest {
     @Test
     @DisplayName("정상 제보는 201 Created + 본문을 돌려준다 (비로그인 — principal null)")
     void createReturns201() throws Exception {
-        given(reportService.create(any(), any())).willReturn(sample());
+        given(reportService.create(any(), any(), any())).willReturn(sample());
 
         mvc.perform(post("/reports").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"placeId\":1,\"reportType\":\"COOL\"}"))
@@ -76,14 +76,14 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.reportType").value("COOL"))
                 .andExpect(jsonPath("$.reportTypeLabel").value("시원해요"));
 
-        then(reportService).should().create(isNull(), any());
+        then(reportService).should().create(isNull(), any(), any());
     }
 
     @Test
     @DisplayName("Authorization 헤더가 있으면 principal이 채워져 서비스로 전달된다 (선택적 인증, trust_score 가중 대상)")
     void createWithAuthAttachesPrincipal() throws Exception {
         given(jwtService.parse("valid-token")).willReturn(new JwtService.AuthPrincipal(10L, Role.USER));
-        given(reportService.create(any(), any())).willReturn(sample());
+        given(reportService.create(any(), any(), any())).willReturn(sample());
 
         mvc.perform(post("/reports")
                         .header("Authorization", "Bearer valid-token")
@@ -92,7 +92,7 @@ class ReportControllerTest {
                 .andExpect(status().isCreated());
 
         ArgumentCaptor<JwtService.AuthPrincipal> principal = ArgumentCaptor.forClass(JwtService.AuthPrincipal.class);
-        then(reportService).should().create(principal.capture(), any());
+        then(reportService).should().create(principal.capture(), any(), any());
         assertThat(principal.getValue().userId()).isEqualTo(10L);
     }
 
@@ -100,7 +100,7 @@ class ReportControllerTest {
     @DisplayName("무효한 토큰이어도 POST /reports는 permitAll이라 401이 아니라 익명(principal null)으로 통과한다")
     void invalidTokenFallsBackToAnonymous() throws Exception {
         given(jwtService.parse("bad-token")).willThrow(new io.jsonwebtoken.security.SignatureException("bad"));
-        given(reportService.create(any(), any())).willReturn(sample());
+        given(reportService.create(any(), any(), any())).willReturn(sample());
 
         mvc.perform(post("/reports")
                         .header("Authorization", "Bearer bad-token")
@@ -108,7 +108,7 @@ class ReportControllerTest {
                         .content("{\"placeId\":1,\"reportType\":\"COOL\"}"))
                 .andExpect(status().isCreated());
 
-        then(reportService).should().create(isNull(), any());
+        then(reportService).should().create(isNull(), any(), any());
     }
 
     @Test
@@ -147,7 +147,7 @@ class ReportControllerTest {
     @Test
     @DisplayName("photoUrl 미지정이면 정상 통과(선택 필드)")
     void missingPhotoUrlIsOptional() throws Exception {
-        given(reportService.create(any(), any())).willReturn(sample());
+        given(reportService.create(any(), any(), any())).willReturn(sample());
 
         mvc.perform(post("/reports").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"placeId\":1,\"reportType\":\"COOL\"}"))
@@ -167,9 +167,9 @@ class ReportControllerTest {
     }
 
     @Test
-    @DisplayName("시크릿 미설정 시 X-Forwarded-For 최좌측이 리밋 키(x: 네임스페이스)로 전달된다")
-    void xffLeftmostIsClientKey() throws Exception {
-        given(reportService.create(any(), any())).willReturn(sample());
+    @DisplayName("시크릿 미설정 시 전달 XFF를 무시하고 TCP peer key로 fail-safe 처리한다")
+    void missingSecretUsesPeerKey() throws Exception {
+        given(reportService.create(any(), any(), any())).willReturn(sample());
 
         mvc.perform(post("/reports").contentType(MediaType.APPLICATION_JSON)
                         .header("X-Forwarded-For", "203.0.113.7, 10.0.0.1")
@@ -178,7 +178,7 @@ class ReportControllerTest {
 
         ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
         then(rateLimiter).should().tryAcquire(key.capture());
-        assertThat(key.getValue()).isEqualTo("x:203.0.113.7");
+        assertThat(key.getValue()).isEqualTo("x:127.0.0.1");
     }
 
     @Test

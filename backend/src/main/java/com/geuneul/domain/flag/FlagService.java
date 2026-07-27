@@ -7,6 +7,7 @@ import com.geuneul.domain.flag.dto.FlagResolveRequest;
 import com.geuneul.domain.flag.dto.FlagResponse;
 import com.geuneul.domain.report.Report;
 import com.geuneul.domain.report.ReportRepository;
+import com.geuneul.domain.report.ReportDerivedCacheService;
 import com.geuneul.domain.review.Review;
 import com.geuneul.domain.review.ReviewRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -42,13 +43,16 @@ public class FlagService {
     private final ReportRepository reportRepository;
     private final ReviewRepository reviewRepository;
     private final Clock clock;
+    private final ReportDerivedCacheService reportDerivedCacheService;
 
     public FlagService(FlagRepository flagRepository, ReportRepository reportRepository,
-                       ReviewRepository reviewRepository, Clock clock) {
+                       ReviewRepository reviewRepository, ReportDerivedCacheService reportDerivedCacheService,
+                       Clock clock) {
         this.flagRepository = flagRepository;
         this.reportRepository = reportRepository;
         this.reviewRepository = reviewRepository;
         this.clock = clock;
+        this.reportDerivedCacheService = reportDerivedCacheService;
     }
 
     /**
@@ -116,7 +120,10 @@ public class FlagService {
     /** 신고 타당 처리 시 대상(제보/후기)을 숨긴다. 대상이 이미 지워졌으면 no-op(멱등). */
     private void hideTarget(FlagTargetType targetType, long targetId) {
         switch (targetType) {
-            case REPORT -> reportRepository.findById(targetId).ifPresent(Report::hide);
+            case REPORT -> reportRepository.findById(targetId).ifPresent(report -> {
+                report.hide();
+                reportDerivedCacheService.evictAfterCommit(report.getPlaceId());
+            });
             case REVIEW -> reviewRepository.findById(targetId).ifPresent(Review::hide);
         }
     }

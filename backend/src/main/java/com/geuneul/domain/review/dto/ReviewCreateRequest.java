@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * 후기 작성/수정 요청. 로그인 필요 — user_id는 요청 바디로 받지 않고 JWT(AuthPrincipal)에서 취한다
- * (docs/SPEC.md 작업 지시). 사진 presign은 아직 없어 URL 배열 스키마만 수용한다.
+ * (docs/SPEC.md 작업 지시). 사진 URL은 서버가 발급한 REVIEW claim의 소유자·완료 상태를 저장 전에 검증한다.
  */
 @Schema(description = "후기 작성/수정 요청 — 로그인 필요, 장소당 1건(재작성 시 갱신)")
 public record ReviewCreateRequest(
@@ -29,7 +29,7 @@ public record ReviewCreateRequest(
         @Size(max = 1000, message = "코멘트는 1000자 이하여야 합니다")
         String comment,
 
-        @Schema(description = "사진 URL 목록 (선택, 최대 10장 — presign은 P2 후속, URL 배열 스키마만 수용)")
+        @Schema(description = "사진 URL 목록 (선택, 최대 10장 — REVIEW presign으로 발급·업로드 완료한 URL만 허용)")
         @Size(max = 10, message = "사진은 최대 10장입니다")
         List<@Size(max = 512, message = "사진 URL은 512자 이하여야 합니다")
                 @Pattern(regexp = "^https://.*", message = "사진 URL은 https://로 시작해야 합니다") String> photos

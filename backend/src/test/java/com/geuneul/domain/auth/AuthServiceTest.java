@@ -43,15 +43,16 @@ class AuthServiceTest {
     void createsNewUser() {
         when(kakao.exchange("code", "uri"))
                 .thenReturn(new OAuthUserInfo("kid-1", null, "그늘러", "http://img"));
-        when(userRepository.findByProviderAndProviderId(AuthProvider.KAKAO, "kid-1"))
-                .thenReturn(Optional.empty());
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findByProviderAndProviderIdForUpdate(AuthProvider.KAKAO, "kid-1"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(User.create(AuthProvider.KAKAO, "kid-1", null, "그늘러", "http://img")));
+        when(userRepository.insertIfAbsent("KAKAO", "kid-1", null, "그늘러", "http://img")).thenReturn(1);
 
         AuthService.AuthResult result = authService.login(AuthProvider.KAKAO, "code", "uri");
 
         assertThat(result.token()).isEqualTo("jwt-token");
         assertThat(result.user().getProviderId()).isEqualTo("kid-1");
-        verify(userRepository).save(any(User.class));
+        verify(userRepository).insertIfAbsent("KAKAO", "kid-1", null, "그늘러", "http://img");
     }
 
     @Test
@@ -60,14 +61,14 @@ class AuthServiceTest {
         User existing = User.create(AuthProvider.KAKAO, "kid-1", null, "옛닉", null);
         when(kakao.exchange("code", "uri"))
                 .thenReturn(new OAuthUserInfo("kid-1", "new@x.com", "새닉", "http://img2"));
-        when(userRepository.findByProviderAndProviderId(AuthProvider.KAKAO, "kid-1"))
+        when(userRepository.findByProviderAndProviderIdForUpdate(AuthProvider.KAKAO, "kid-1"))
                 .thenReturn(Optional.of(existing));
 
         AuthService.AuthResult result = authService.login(AuthProvider.KAKAO, "code", "uri");
 
         assertThat(result.user().getNickname()).isEqualTo("새닉");
         assertThat(result.user().getEmail()).isEqualTo("new@x.com");
-        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).insertIfAbsent(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -75,9 +76,9 @@ class AuthServiceTest {
     void fallsBackNickname() {
         when(kakao.exchange("code", "uri"))
                 .thenReturn(new OAuthUserInfo("kid-2", null, "  ", null));
-        when(userRepository.findByProviderAndProviderId(AuthProvider.KAKAO, "kid-2"))
-                .thenReturn(Optional.empty());
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findByProviderAndProviderIdForUpdate(AuthProvider.KAKAO, "kid-2"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(User.create(AuthProvider.KAKAO, "kid-2", null, "카카오사용자", null)));
 
         AuthService.AuthResult result = authService.login(AuthProvider.KAKAO, "code", "uri");
         assertThat(result.user().getNickname()).isEqualTo("카카오사용자");
@@ -89,5 +90,16 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login(AuthProvider.GOOGLE, "code", "uri"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("404");
+    }
+
+    @Test
+    @DisplayName("로그아웃은 사용자 token_version을 증가시켜 기존 토큰을 폐기한다")
+    void logoutRevokesSessions() {
+        User user = User.create(AuthProvider.KAKAO, "kid", null, "그늘러", null);
+        when(userRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(user));
+
+        authService.logout(10L);
+
+        assertThat(user.getTokenVersion()).isEqualTo(1L);
     }
 }

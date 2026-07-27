@@ -44,7 +44,8 @@ resource "aws_iam_role" "ecs_task" {
 }
 
 # PhotoService(S3Presigner)가 이 롤로 PUT/GET을 서명한다 — 정적 액세스키 없이 태스크 롤만으로 presign
-# (규칙 D와 정합: 자격증명이 코드/env에 남지 않는다). 버킷 ARN 한정 + PutObject/GetObject만(Delete/List 없음).
+# (규칙 D와 정합: 자격증명이 코드/env에 남지 않는다). cleanup은 만료된 claim의 정확한 key만 DeleteObject하며
+# ListBucket 없이 동일 버킷 object ARN에만 최소 권한을 둔다.
 resource "aws_iam_role_policy" "ecs_task_s3_photos" {
   name = "${var.project}-task-s3-photos"
   role = aws_iam_role.ecs_task.id
@@ -52,7 +53,7 @@ resource "aws_iam_role_policy" "ecs_task_s3_photos" {
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
-      Action   = ["s3:PutObject", "s3:GetObject"]
+      Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
       Resource = "${aws_s3_bucket.photos.arn}/*"
     }]
   })

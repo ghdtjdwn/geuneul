@@ -1,10 +1,9 @@
 package com.geuneul.domain.ai;
 
 import com.geuneul.domain.report.Report;
+import com.geuneul.domain.report.ReportDerivedCacheService;
 import com.geuneul.domain.report.ReportRepository;
 import com.geuneul.domain.report.ReportType;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -51,33 +50,30 @@ public class AiSummaryService {
 
     private final ReportRepository reportRepository;
     private final ChatCompletionClient client;
+    private final ReportDerivedCacheService derivedCacheService;
     private final Clock clock;
 
-    public AiSummaryService(ReportRepository reportRepository, ChatCompletionClient client, Clock clock) {
+    public AiSummaryService(ReportRepository reportRepository, ChatCompletionClient client,
+                            ReportDerivedCacheService derivedCacheService, Clock clock) {
         this.reportRepository = reportRepository;
         this.client = client;
+        this.derivedCacheService = derivedCacheService;
         this.clock = clock;
     }
 
     /**
      * 장소의 최근(유효) 제보를 근거로 한 문장 요약을 반환한다. 캐시 키는 placeId만 — 캐시가 살아있는
      * 동안은 그 장소의 제보가 더 들어와도 TTL이 지나야 재평가된다(비용 방어, 지시사항).
-     *
-     * <p>Optional 반환값은 Spring 캐시 프록시가 언랩하므로 {@code #result}는 String(또는 empty면 null) —
-     * WeatherClient.fetchNowcast의 TS-011 교훈과 동일하게 {@code unless = "#result == null"}로 판정한다.
+     * 단, report 생성·숨김은 DB generation을 올리므로 기존 캐시를 즉시 대체한다.
+     * Optional은 캐시 경계에서 nullable String으로 변환해 기존 String 전용 Redis serializer 계약을 유지한다.
      */
-    /**
-     * 장소에 새 제보가 들어오면 그 장소의 요약 캐시를 버린다 — 다음 상세 조회 때 최신 제보가 반영된 요약을
-     * 새로 생성하게 한다(제보 목록·배지·점수는 이미 실시간이므로 요약만 3h 지연되던 것을 없앤다).
-     * {@link com.geuneul.domain.report.ReportService}가 제보 저장 성공 후 호출한다 — 외부 빈 호출이라
-     * 캐시 프록시를 거쳐 {@code @CacheEvict}가 동작한다(self-invocation 아님).
-     */
-    @CacheEvict(cacheNames = "aiSummary", key = "#placeId")
-    public void evictSummary(long placeId) {
+    public Optional<String> summarize(long placeId) {
+        String summary = derivedCacheService.cached("aiSummary", placeId,
+                () -> loadSummary(placeId).orElse(null), java.util.Objects::nonNull);
+        return Optional.ofNullable(summary);
     }
 
-    @Cacheable(cacheNames = "aiSummary", key = "#placeId", unless = "#result == null")
-    public Optional<String> summarize(long placeId) {
+    private Optional<String> loadSummary(long placeId) {
         List<Report> reports = reportRepository
                 .findTop20ByPlaceIdAndExpiresAtAfterAndHiddenFalseOrderByCreatedAtDesc(placeId, OffsetDateTime.now(clock));
         if (reports.isEmpty()) {

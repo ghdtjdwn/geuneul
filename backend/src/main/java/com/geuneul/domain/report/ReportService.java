@@ -1,9 +1,9 @@
 package com.geuneul.domain.report;
 
-import com.geuneul.domain.ai.AiSummaryService;
 import com.geuneul.domain.auth.JwtService;
 import com.geuneul.domain.auth.TrustScoreService;
 import com.geuneul.domain.photo.PhotoService;
+import com.geuneul.domain.photo.PhotoUploadService;
 import com.geuneul.domain.place.PlaceRepository;
 import com.geuneul.domain.report.dto.PopularTimesSlot;
 import com.geuneul.domain.report.dto.ReportCreateRequest;
@@ -31,17 +31,19 @@ public class ReportService {
     private final PlaceRepository placeRepository;
     private final TrustScoreService trustScoreService;
     private final PhotoService photoService;
-    private final AiSummaryService aiSummaryService;
+    private final ReportDerivedCacheService derivedCacheService;
+    private final PhotoUploadService photoUploadService;
     private final Clock clock;
 
     public ReportService(ReportRepository reportRepository, PlaceRepository placeRepository,
                          TrustScoreService trustScoreService, PhotoService photoService,
-                         AiSummaryService aiSummaryService, Clock clock) {
+                         ReportDerivedCacheService derivedCacheService, PhotoUploadService photoUploadService, Clock clock) {
         this.reportRepository = reportRepository;
         this.placeRepository = placeRepository;
         this.trustScoreService = trustScoreService;
         this.photoService = photoService;
-        this.aiSummaryService = aiSummaryService;
+        this.derivedCacheService = derivedCacheService;
+        this.photoUploadService = photoUploadService;
         this.clock = clock;
     }
 
@@ -50,9 +52,10 @@ public class ReportService {
      *                  SecurityConfig가 강제하지 않는다, ReviewService.create의 "요청 바디로 안 받는다"와 동일 원칙).
      */
     @Transactional
-    public ReportResponse create(JwtService.AuthPrincipal principal, ReportCreateRequest request) {
+    public ReportResponse create(JwtService.AuthPrincipal principal, ReportCreateRequest request, String clientKey) {
         requirePlace(request.placeId());
         requireReporterLocation(request);
+        photoUploadService.validateReport(request.photoUrl(), principal, clientKey);
         Long userId = principal == null ? null : principal.userId();
         // 비로그인이면 무조건 익명(신원 자체가 없음). 로그인 유저는 "익명으로 표시" 선택과 무관하게
         // userId는 기록해 trust_score 가중을 유지한다(docs/SPEC.md §6, Report.of 주석 참고).
@@ -71,7 +74,7 @@ public class ReportService {
             trustScoreService.recalculate(userId);
         }
         // 새 제보가 장소 상태를 바꿨으니 AI 한줄요약 캐시를 버린다 — 다음 상세 조회 때 최신 반영 요약을 새로 생성.
-        aiSummaryService.evictSummary(request.placeId());
+        derivedCacheService.evictAfterCommit(request.placeId());
         // 비공개 버킷이라 저장 URL은 그대로 못 본다 → 조회 시점 presigned GET으로 변환(N1, 제보 사진도 리뷰와 공유 수정).
         return ReportResponse.of(saved, photoService.presignGet(saved.getPhotoUrl()));
     }
@@ -94,8 +97,12 @@ public class ReportService {
      * <p>느리게 변하는 과거 이력 집계라 장소별로 1시간 Redis 캐시(P4, RedisCacheConfig.POPULAR_TIMES_CACHE)
      * — 상세 조회마다 group-by를 반복하지 않는다. Redis 장애 시 CacheErrorHandler가 우회해 원본 쿼리로 폴백.
      */
-    @org.springframework.cache.annotation.Cacheable(cacheNames = "popularTimes", key = "#placeId")
     public List<PopularTimesSlot> popularTimes(long placeId) {
+        return derivedCacheService.cached("popularTimes", placeId,
+                () -> loadPopularTimes(placeId), ignored -> true);
+    }
+
+    private List<PopularTimesSlot> loadPopularTimes(long placeId) {
         requirePlace(placeId);
         return reportRepository.congestionByPlace(placeId).stream()
                 .map(PopularTimesSlot::of)

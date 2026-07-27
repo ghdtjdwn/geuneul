@@ -1,5 +1,7 @@
 package com.geuneul.domain.report;
 
+import com.geuneul.global.web.RedisFixedWindowRateLimiter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -14,12 +16,22 @@ public class ExternalApiRateLimiter {
 
     private final Clock clock;
     private final Map<String, ClientWindow> windows = new ConcurrentHashMap<>();
+    private RedisFixedWindowRateLimiter distributed;
 
     public ExternalApiRateLimiter(Clock clock) {
         this.clock = clock;
     }
 
+    @Autowired(required = false)
+    void setDistributed(RedisFixedWindowRateLimiter distributed) {
+        this.distributed = distributed;
+    }
+
     public boolean tryAcquire(String scope, String clientKey, int perMinute) {
+        if (distributed != null) {
+            var shared = distributed.tryAcquire("external-" + scope, clientKey, perMinute, 0);
+            if (shared.isPresent()) return shared.get();
+        }
         long minuteBucket = clock.instant().getEpochSecond() / 60;
         evictIfOversized(minuteBucket);
 

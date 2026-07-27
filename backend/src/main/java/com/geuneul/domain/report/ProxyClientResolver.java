@@ -18,7 +18,8 @@ import org.springframework.util.StringUtils;
  *       IP({@code X-Client-Ip})를 신뢰한다 → BFF 경로의 유저별 리밋(다중 유저 정상 동작).</li>
  *   <li>시크릿이 설정돼 있는데 증명이 없으면(=ALB 직접 타격) ALB가 append 한 <b>최우측 XFF</b>(위조 불가)로
  *       키잉 → 직접 남용은 실 IP당 하드 리밋.</li>
- *   <li>시크릿 <b>미설정(현재/개발)</b>이면 기존 호환(최좌측 XFF) — 회귀 없음. 활성화는 배포 후 config 한 번.</li>
+ *   <li>시크릿이 미설정이면 전달 헤더를 신뢰하지 않고 TCP 피어로 축약한다. 사용자별 구분은 잃지만
+ *       공격자가 XFF를 회전해 리밋을 우회할 수 없는 fail-safe 동작이다.</li>
  * </ul>
  * 순수 오버로드({@link #resolve(String, String, String, String)})로 단위 테스트한다.
  */
@@ -54,16 +55,16 @@ public class ProxyClientResolver {
             return "c:" + clientIp.strip();
         }
 
-        // ② XFF 기반 — 시크릿이 켜져 있으면 위조 불가한 최우측(ALB append), 아니면 기존 호환 최좌측
-        if (StringUtils.hasText(xff)) {
+        // ② 시크릿이 설정된 운영의 직접 요청은 ALB가 append한 최우측 hop만 신뢰한다.
+        if (secretConfigured && StringUtils.hasText(xff)) {
             String[] hops = xff.split(",");
-            String token = secretConfigured ? hops[hops.length - 1] : hops[0];
+            String token = hops[hops.length - 1];
             if (StringUtils.hasText(token)) {
                 return "x:" + token.strip();
             }
         }
 
-        // ③ 최후: TCP 피어
+        // ③ 시크릿 미설정도 여기로 수렴: 공유 버킷이 되더라도 위조 우회보다 안전하다.
         return "x:" + (remoteAddr == null ? "unknown" : remoteAddr);
     }
 }

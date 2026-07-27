@@ -14,6 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Authorization: Bearer {JWT} 를 검증해 SecurityContext에 인증을 심는다(스테이트리스).
@@ -41,7 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 JwtService.AuthPrincipal principal = jwtService.parse(header.substring(BEARER.length()));
-                principal = reconcileAdminRole(principal);
+                principal = reconcileServerState(principal).orElseThrow();
                 var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name()));
                 var authentication = new UsernamePasswordAuthenticationToken(principal, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -53,13 +54,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private JwtService.AuthPrincipal reconcileAdminRole(JwtService.AuthPrincipal principal) {
-        if (principal.role() != Role.ADMIN) {
-            return principal;
-        }
-        Role currentRole = userRepository == null
-                ? Role.USER
-                : userRepository.findById(principal.userId()).map(u -> u.getRole()).orElse(Role.USER);
-        return currentRole == Role.ADMIN ? principal : new JwtService.AuthPrincipal(principal.userId(), Role.USER);
+    private Optional<JwtService.AuthPrincipal> reconcileServerState(JwtService.AuthPrincipal principal) {
+        if (userRepository == null) return Optional.of(principal);
+        return userRepository.findById(principal.userId())
+                .filter(user -> user.getTokenVersion() == principal.tokenVersion())
+                .map(user -> {
+                    Role role = principal.role() == Role.ADMIN && user.getRole() != Role.ADMIN
+                            ? Role.USER : principal.role();
+                    return new JwtService.AuthPrincipal(principal.userId(), role, principal.tokenVersion());
+                });
     }
 }

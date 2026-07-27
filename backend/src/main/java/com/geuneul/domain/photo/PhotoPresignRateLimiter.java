@@ -1,5 +1,7 @@
 package com.geuneul.domain.photo;
 
+import com.geuneul.global.web.RedisFixedWindowRateLimiter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -12,9 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 찍어주는 셈이라 익명 제보(ReportRateLimiter)와 별개로 방어가 필요하다. {@code review}는 로그인이
  * 이미 걸려 있지만 탈취 계정 남용 방어를 위해 동일하게 적용한다.
  *
- * <p>ReportRateLimiter(TS-008 하드닝, 원자적 compute·맵 상한 evict)와 설계·구현이 동일하다 —
- * 소비자가 report/photo 둘뿐이라 "rule of three"에 따라 지금은 추상화하지 않고 나란히 둔다.
- * 세 번째 소비자가 생기면 그때 {@code global.web}으로 공통 추출한다(WORKLOG 근거).
+ * <p>정상 경로는 {@code RedisFixedWindowRateLimiter}의 공유 Lua 카운터를 사용한다. Redis 장애 때만
+ * ReportRateLimiter와 같은 bounded local 구현으로 폴백해 저장소 장애를 전체 UGC 장애로 번지지 않게 한다.
  */
 @Component
 public class PhotoPresignRateLimiter {
@@ -26,12 +27,22 @@ public class PhotoPresignRateLimiter {
 
     private final Clock clock;
     private final Map<String, ClientWindow> windows = new ConcurrentHashMap<>();
+    private RedisFixedWindowRateLimiter distributed;
 
     public PhotoPresignRateLimiter(Clock clock) {
         this.clock = clock;
     }
 
+    @Autowired(required = false)
+    void setDistributed(RedisFixedWindowRateLimiter distributed) {
+        this.distributed = distributed;
+    }
+
     public boolean tryAcquire(String clientKey) {
+        if (distributed != null) {
+            var shared = distributed.tryAcquire("photo-presign", clientKey, PER_MINUTE, PER_HOUR);
+            if (shared.isPresent()) return shared.get();
+        }
         long epochSecond = clock.instant().getEpochSecond();
         long minuteBucket = epochSecond / 60;
         long hourBucket = epochSecond / 3_600;

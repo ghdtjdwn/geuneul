@@ -1,5 +1,6 @@
 package com.geuneul.domain.photo;
 
+import com.geuneul.domain.auth.JwtService;
 import com.geuneul.domain.photo.dto.PhotoPresignRequest;
 import com.geuneul.domain.photo.dto.PhotoPresignResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,12 +28,13 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
  * 제보/후기 사진 업로드 — S3 presigned PUT URL 발급(docs/SPEC.md §7·§9 POST /photos/presign).
  * 백엔드는 파일 바이트를 절대 거치지 않는다: 브라우저가 이 서비스가 서명한 URL로 S3에 직접 PUT한다.
  *
- * <p>제약(둘 다 presign 시점에 강제 — 업로드 후가 아니라 업로드 전에 걸러진다):
+ * <p>제약(발급 시 계약하고 UGC 저장 직전에 S3 HEAD로 다시 검증한다):
  * <ul>
  *   <li><b>타입</b>: {@link #ALLOWED_CONTENT_TYPES} 화이트리스트만. 서명된 Content-Type 헤더라
  *       브라우저가 실제 PUT에서 다른 타입을 보내면 S3가 서명 불일치로 거부한다.</li>
  *   <li><b>크기</b>: {@link #MAX_UPLOAD_BYTES} 초과면 presign 자체를 거부. 서명에 Content-Length를
  *       실어(PutObjectRequest#contentLength) 실제 PUT이 다른 크기를 보내면 마찬가지로 거부된다.</li>
+ *   <li><b>불변성</b>: {@code If-None-Match: *}를 서명해 이미 생성된 key의 덮어쓰기를 S3가 412로 거부한다.</li>
  * </ul>
  * purpose=REVIEW는 후기(§9 POST /reviews)와 동일하게 로그인을 요구한다(휴대폰 카메라로 즉시 찍는
  * 제보와 달리 후기는 이미 로그인 UX를 통과한 뒤라 마찰 비용이 없다 — WORKLOG 근거).
@@ -47,7 +49,7 @@ public class PhotoService {
             "image/webp", "webp"
     );
 
-    /** 8MB — 휴대폰 사진 1장 기준 여유치. presigned PUT 크기 상한은 서명된 Content-Length로 강제(클래스 주석). */
+    /** 8MB — 휴대폰 사진 1장 기준 여유치. 발급 계약과 업로드 완료 후 S3 HEAD에서 모두 확인한다. */
     static final long MAX_UPLOAD_BYTES = 8L * 1024 * 1024;
 
     /** 짧게: presign 발급 직후 바로 업로드하는 흐름이라 길게 열어둘 이유가 없다(탈취된 URL의 악용 창 최소화). */
@@ -64,19 +66,22 @@ public class PhotoService {
     private final String bucket;
     private final String region;
     private final Clock clock;
+    private final PhotoUploadService uploadService;
 
     public PhotoService(S3Presigner presigner,
                         @Value("${aws.s3.bucket:}") String bucket,
                         @Value("${aws.s3.region:ap-northeast-2}") String region,
-                        Clock clock) {
+                        Clock clock, PhotoUploadService uploadService) {
         this.presigner = presigner;
         this.bucket = bucket;
         this.region = region;
         this.clock = clock;
+        this.uploadService = uploadService;
     }
 
-    /** @param authenticated 요청에 유효 JWT가 있었는지 — purpose=REVIEW면 필수. */
-    public PhotoPresignResponse presign(PhotoPresignRequest request, boolean authenticated) {
+    /** purpose=REVIEW는 인증 주체가 필수이며, 발급 결과는 서버 upload claim에 함께 기록한다. */
+    public PhotoPresignResponse presign(PhotoPresignRequest request, JwtService.AuthPrincipal principal,
+                                        String clientKey) {
         String extension = ALLOWED_CONTENT_TYPES.get(request.contentType());
         if (extension == null) {
             throw new ResponseStatusException(BAD_REQUEST,
@@ -88,7 +93,7 @@ public class PhotoService {
         }
 
         PhotoPurpose purpose = PhotoPurpose.fromValue(request.purpose());
-        if (purpose == PhotoPurpose.REVIEW && !authenticated) {
+        if (purpose == PhotoPurpose.REVIEW && principal == null) {
             throw new ResponseStatusException(UNAUTHORIZED, "후기 사진은 로그인 후 업로드할 수 있어요.");
         }
         if (!StringUtils.hasText(bucket)) {
@@ -103,6 +108,8 @@ public class PhotoService {
                 .key(key)
                 .contentType(request.contentType())
                 .contentLength(request.contentLength())
+                // Signed conditional create: a still-valid URL cannot overwrite the object after claim validation.
+                .ifNoneMatch("*")
                 .build();
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
@@ -116,6 +123,8 @@ public class PhotoService {
         // 실제 뷰잉은 읽기 시점에 presignGet()으로 임시 GET 서명을 발급한다(N1, 버킷 퍼블릭 전환 없이 403 해소).
         String objectUrl = objectUrlFor(key);
         OffsetDateTime expiresAt = OffsetDateTime.now(clock).plus(SIGNATURE_DURATION);
+        uploadService.register(key, objectUrl, purpose, principal, clientKey,
+                request.contentType(), request.contentLength());
 
         return new PhotoPresignResponse(presigned.url().toExternalForm(), objectUrl, key, expiresAt);
     }

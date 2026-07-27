@@ -4,6 +4,7 @@ import com.geuneul.AbstractIntegrationTest;
 import com.geuneul.domain.place.Place;
 import com.geuneul.domain.place.PlaceCategory;
 import com.geuneul.domain.place.PlaceRepository;
+import com.geuneul.domain.photo.PhotoUploadService;
 import com.geuneul.global.geo.GeoUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.OffsetDateTime;
@@ -27,7 +30,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (같은 분 안에서 테스트끼리 분당 3회 창을 나눠 먹어 플래키해지는 것을 방지).
  */
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "geuneul.proxy-secret=test-proxy-secret")
 class ReportFlowIT extends AbstractIntegrationTest {
+
+    @MockitoBean
+    PhotoUploadService photoUploadService;
 
     @Autowired
     MockMvc mvc;

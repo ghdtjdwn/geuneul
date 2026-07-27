@@ -8,14 +8,16 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audit:dependencies": "node scripts/verify-dependency-security.mjs && pnpm audit --audit-level low"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
-    "next": "^16.2.10",
+    "next": "^16.2.12",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-kakao-maps-sdk": "^1.2.1"
+    "react-kakao-maps-sdk": "^1.2.1",
+    "sharp": "0.35.3"
   },
   "devDependencies": {
     "@serwist/next": "^9.5.11",
@@ -24,8 +26,9 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.10",
+    "eslint-config-next": "^16.2.12",
     "kakao.maps.d.ts": "^0.1.40",
+    "postcss": "8.5.23",
     "serwist": "^9.5.11",
     "tailwindcss": "^4.3.2",
     "typescript": "^6.0.3"

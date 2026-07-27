@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
  * 인증 API (docs/SPEC.md §9). 소셜 로그인은 프론트 BFF가 받은 인가 코드를 서버에서 교환한다.
@@ -42,5 +44,12 @@ public class AuthController {
     @GetMapping("/me")
     public UserResponse me(@AuthenticationPrincipal JwtService.AuthPrincipal principal) {
         return UserResponse.of(authService.getById(principal.userId()));
+    }
+
+    @Operation(summary = "로그아웃", description = "현재 사용자의 token_version을 올려 기존 JWT를 서버에서 즉시 폐기한다.")
+    @PostMapping("/auth/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(@AuthenticationPrincipal JwtService.AuthPrincipal principal) {
+        authService.logout(principal.userId());
     }
 }
