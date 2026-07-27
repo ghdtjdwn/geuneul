@@ -1,5 +1,5 @@
 # Application Load Balancer → Fargate. 안정적 공개 URL 제공(태스크 재배포에도 불변).
-# 헬스체크는 /actuator/health. (ALB ~$16/월 = 사실상 유일한 상시 비용, $200 크레딧으로 커버.)
+# 헬스체크는 /actuator/health. (서울 리전 기본료 약 $16.43/월 + LCU, Free plan 크레딧으로 상쇄.)
 
 resource "aws_lb" "app" {
   name               = "${var.project}-alb"
