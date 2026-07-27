@@ -1,5 +1,5 @@
 # RDS PostgreSQL (PostGIS는 Flyway V1의 CREATE EXTENSION으로 활성화).
-# 프리티어: db.t3.micro, 20GB gp3, Single-AZ.
+# 최소급 구성: db.t3.micro, 20GB gp3, Single-AZ. 이 계정에서는 사용액을 Free plan 크레딧으로 상쇄한다.
 
 resource "aws_db_subnet_group" "db" {
   name       = "${var.project}-db"
@@ -11,7 +11,7 @@ resource "aws_db_instance" "postgres" {
   identifier        = "${var.project}-db"
   engine            = "postgres"
   engine_version    = "16"
-  instance_class    = "db.t3.micro" # 프리티어 대상
+  instance_class    = "db.t3.micro" # 최소급 구성. 컴퓨트 사용액은 Free plan 크레딧에서 차감된다.
   allocated_storage = 20
   storage_type      = "gp3"
   storage_encrypted = true # 저장 암호화(KMS). 라이브 DB는 암호화 스냅샷에서 복원해 적용(아래 snapshot_identifier·TS-035).
@@ -25,8 +25,8 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
   multi_az               = false
-  # 자동 백업(PITR) — 이 계정 프리티어는 retention 최대 1일(7일은 FreeTierRestrictionError, 실측 TS-035).
-  # 1일이라도 자동 스냅샷 + 1일 PITR을 확보한다(유료 전환 시 7일로). 백업 스토리지는 DB 크기 이하라 무료.
+  # 자동 백업(PITR) — 이 계정의 Free plan API 제한은 retention 최대 1일(7일은 FreeTierRestrictionError, 실측 TS-035).
+  # 1일이라도 자동 스냅샷 + 1일 PITR을 확보한다(유료 전환 시 7일 검토). DB 삭제 뒤 남은 수동 스냅샷은 과금될 수 있다.
   backup_retention_period   = 1
   backup_window             = "18:00-18:30" # UTC = 03:00 KST(트래픽 낮은 새벽)
   copy_tags_to_snapshot     = true

@@ -1,12 +1,12 @@
 # 배포 (AWS — IaC + push 자동배포)
 
 > **ECS Fargate**(관리형 컨테이너) + **RDS PostgreSQL(PostGIS)** + **Terraform**(IaC) + **GitHub Actions OIDC**(키 없는 배포) + **ECR** + **ALB** + **CloudFront**(HTTPS).
-> 비용 원칙: $200 신규 크레딧 + RDS 프리티어 + ECS 무료 control plane + NAT 게이트웨이 없음(Fargate는 퍼블릭 서브넷, SG로 잠금)으로 최소화.
+> 비용 원칙: 신규 계정 Free plan 크레딧 + ECS 무료 control plane + NAT 게이트웨이 없음(Fargate는 퍼블릭 서브넷, SG로 잠금)으로 최소화한다. RDS·ElastiCache·ALB·Fargate·공인 IPv4는 개별 무료 리소스가 아니며 사용액이 크레딧에서 차감된다.
 >
 > ⚠️ 모든 비밀(DB 비번·키)은 SSM/환경변수로만. 레포 커밋 금지. `terraform.tfvars`·`*.tfstate`는 gitignore됨.
 
 ## 사전 준비
-- AWS 계정(신규면 $200 크레딧), AWS CLI 로그인(`aws configure` 또는 SSO).
+- AWS 계정(신규 Free plan이면 지급·활동 크레딧의 잔액과 만료일을 먼저 확인), AWS CLI 로그인(`aws configure` 또는 SSO).
 - Terraform 설치(`brew install terraform`).
 
 ## 1. 인프라 프로비저닝 (Terraform)
@@ -40,9 +40,11 @@ apply 후 output 확인:
 - **이후 `main`에 `backend/**` 변경이 push될 때마다 자동 재배포.** (문서·인프라만 바뀐 push는 `deploy.yml`의 paths 필터로 배포를 트리거하지 않음. CI(test)는 별도 `ci.yml`.)
 
 ## 비용 메모
-- 상시: **ALB ~$16/월 + Fargate 태스크(0.5 vCPU/1GB 상시 1개) ~$20/월**(Fargate는 프리티어 없음). RDS(db.t3.micro)는 프리티어, ECS control plane 무료, SSM/ECR/CloudFront(저트래픽) 사실상 무료.
-- 오토스케일링(CPU 60% target-tracking, min1/max3) 스케일아웃 시 최대 ~$60/월 수준(부하 종료 후 원복).
-- **전체 내리기(상시 비용 $0)**: `./infra/teardown.sh` — RDS 삭제보호 해제 + final 스냅샷 충돌 정리 + `terraform destroy`를 한 번에. 데이터 스냅샷은 부활용으로 남긴다(거의 무료). Vercel 프론트는 무료라 그대로 둬도 된다.
+- 2026-07-27 서울 리전 정가와 라이브 구성 기준 상시 하한은 **약 $89.41/월 + 변동 사용량**이다. Fargate(0.5 vCPU/1GB) $20.72, ALB 기본료 $16.43, RDS 컴퓨트 $20.44 + gp3 20GB $2.62, ElastiCache $18.25, 공인 IPv4 3개 $10.95가 주요 항목이다. ECR·로그·S3·전송·ALB LCU는 별도다.
+- 청구서가 $0이어도 사용액이 0인 것은 아니다. Free plan에서는 사용액을 크레딧으로 상쇄하며, 크레딧 소진 또는 플랜 만료 중 먼저 오는 시점에 계정 접근이 중단된다. 2026-07-27 실측은 잔액 $73.15, 최근 정상일 약 $2.94/일로 단순 환산 시 8월 21~22일 소진 예상이다.
+- `geuneul-gross-usage-alert` Budget은 크레딧을 제외한 월 총사용량을 보고 실제 $40 또는 예상 $50 초과 시 기존 수신자에게 알린다. 기존 zero-spend Budget은 크레딧 이후 청구 감시용으로 유지한다.
+- 오토스케일링(CPU 60% target-tracking, min1/max3)은 태스크가 늘 때마다 Fargate와 공인 IPv4 사용액이 추가된다. 비용 경보와 실제 트래픽을 확인하지 않고 부하를 오래 유지하지 않는다.
+- **전체 내리기(상시 컴퓨트 비용 제거)**: `./infra/teardown.sh` — RDS 삭제보호 해제 + final 스냅샷 충돌 정리 + `terraform destroy`를 한 번에. 남긴 RDS 수동/final 스냅샷은 DB 삭제 뒤 백업 스토리지 비용이 생길 수 있으므로 복구 필요성과 비용을 별도로 확인한다. Vercel 프론트는 무료라 그대로 둬도 된다.
 - **부활**: `cd infra/terraform && terraform apply` → 첫 배포 → 공공데이터 재적재(아래 '운영 인제스천'). CloudFront 도메인이 새로 발급되면 README 배지·Vercel `GEUNEUL_API_BASE`를 갱신한다.
 
 ## 운영 인제스천 (공공데이터 → 프로덕션 RDS)

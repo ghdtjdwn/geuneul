@@ -109,7 +109,7 @@ variable "task_cpu" {
 }
 
 variable "task_memory" {
-  description = "Fargate 메모리(MB). Spring Boot+Hibernate+Flyway엔 512는 빠듯 → 1024 권장(cpu 256과 유효 조합)."
+  description = "Fargate 메모리(MB). Spring Boot+Hibernate+Flyway엔 512는 빠듯 → 1024 권장(cpu 512와 유효 조합)."
   type        = string
   default     = "1024"
 }
@@ -121,7 +121,7 @@ variable "autoscaling_enabled" {
 }
 
 variable "autoscaling_max" {
-  description = "ECS Service Auto Scaling 최대 태스크 수. min은 1로 고정(autoscaling.tf). 기본 3 — Fargate 0.25vCPU/1GB 태스크 기준 베이스라인(~$12/월) 대비 최대 3배(~$36/월)로 비용을 유계시킨 값($200 크레딧 보호, docs/SPEC.md §7)."
+  description = "ECS Service Auto Scaling 최대 태스크 수. min은 1로 고정(autoscaling.tf). 기본 3 — Fargate 0.5vCPU/1GB 태스크 계층을 베이스라인 약 $20.72/월의 최대 3배로 제한하며, 태스크별 공인 IPv4 사용액도 추가된다(Free plan 크레딧 보호, docs/SPEC.md §7)."
   type        = number
   default     = 3
 }

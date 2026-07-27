@@ -3,14 +3,14 @@
 # 부하에 실제로 반응하는지를 같이 실증한다(짝 산출물, ADR-0012 참고).
 #
 # 지표 선택 = CPU 이용률(ECSServiceAverageCPUUtilization), ALB RequestCountPerTarget이 아니라.
-# 이유(ADR-0012에 근거 상술): 태스크가 0.25 vCPU(task_cpu=256, ecs.tf)로 이미 얇아 요청당 비용 편차가 크다
+# 이유(ADR-0012에 근거 상술): 태스크가 0.5 vCPU(task_cpu=512, ADR-0025)로 승격됐어도 요청당 비용 편차가 크다
 # (`/places` bounds 조회 vs `/places/{id}` 단건 vs `/recommendations` 2단 재랭킹 vs AI 요약 외부 I/O 대기) —
 # "요청 수"는 이 이질적 비용을 대표하지 못하지만 "그 작은 태스크가 실제로 포화됐는가"는 CPU 이용률이 직접
 # 알려준다. PostGIS 반경/kNN 연산 자체는 RDS에서 도는 별도 리소스라 이 정책의 스케일 대상(ECS 앱 계층)과는
 # 무관 — 여기서 잡는 건 앱 계층(Jackson 직렬화·JTS 좌표 변환·Spring MVC 디스패치)의 CPU 포화다.
 #
-# min=1 · max=var.autoscaling_max(기본 3) — Fargate 0.25vCPU/1GB 태스크 기준 3개까지가 상한이라 최악의 경우도
-# 베이스라인(~$12/월, HANDOFF 운영 치트시트) 대비 최대 3배(~$36/월)로 유계·가역적이다(스케일인되면 즉시
+# min=1 · max=var.autoscaling_max(기본 3) — Fargate 0.5vCPU/1GB 태스크 기준 3개까지가 상한이라 태스크 계층은
+# 베이스라인 약 $20.72/월 대비 최대 3배 수준이며, 태스크별 공인 IPv4 사용액도 추가된다(스케일인되면 즉시
 # 원복). ADR-0011(공공데이터 스케줄)이 기본 DISABLED로 시작한 것과 달리, 여기는 기본 **ENABLED**로 뒀다 —
 # 그 스케줄의 위험은 "사람 없이 soft-delete까지 도는 데이터 변경"(비가역·조용함)이었지만, 오토스케일링의
 # 위험은 "일시적으로 유계·가역적인 비용"뿐이라 리스크 성격이 다르다(ADR-0012 근거 상술). 그래도
@@ -39,7 +39,7 @@ resource "aws_appautoscaling_policy" "ecs_app_cpu" {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
     }
 
-    # 60% — AWS 권장 범위(50~70%)의 중간값. 스파이크에 대응할 여유(태스크가 0.25vCPU라 포화가 빠름)와
+    # 60% — AWS 권장 범위(50~70%)의 중간값. 스파이크에 대응할 여유와
     # 너무 이른 스케일아웃(불필요한 비용) 사이 균형.
     target_value = 60
 

@@ -1,5 +1,6 @@
 # ElastiCache Redis (P3 날씨 초단기실황 TTL 캐시, docs/SPEC.md §7).
-# 단일 노드 cache.t3.micro — 신규계정 프리티어(750h/월, 12개월) 대상 노드 타입. 프리티어 소진 시 ~$12/월.
+# 단일 노드 cache.t3.micro. 현재 계정에서는 노드 사용액이 Free plan 크레딧에서 차감되며 2026-07 서울 리전
+# 730시간 정가 하한은 약 $18.25/월이다.
 # 사설 서브넷 + SG로 ECS 태스크에서만 접근(6379). TLS 미사용(사설망·SG 잠금) → 앱 REDIS_SSL=false.
 #
 # ⚠️ 비용 발생 리소스. terraform apply는 사용자 확인 후 실행한다.
@@ -35,7 +36,7 @@ resource "aws_security_group" "redis" {
 resource "aws_elasticache_cluster" "redis" {
   cluster_id           = "${var.project}-redis"
   engine               = "redis"
-  node_type            = "cache.t3.micro" # 프리티어 대상
+  node_type            = "cache.t3.micro" # 최소급 구성. 노드 사용액은 Free plan 크레딧에서 차감된다.
   num_cache_nodes      = 1
   parameter_group_name = "default.redis7"
   engine_version       = "7.1"
