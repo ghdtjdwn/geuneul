@@ -25,7 +25,7 @@ dependencyManagement {
         mavenBom 'org.testcontainers:testcontainers-bom:2.0.5'
         // AWS SDK v2 BOM — S3 presigned URL(사진 업로드, P2). Boot 4가 AWS SDK 버전을 관리하지 않아 직접 고정
         // (2026-07 시점 최신 안정 라인). spring-cloud-aws는 과설계(S3Presigner 하나만 필요) — 배제.
-        mavenBom 'software.amazon.awssdk:bom:2.46.6'
+        mavenBom 'software.amazon.awssdk:bom:2.49.6'
     }
 }
 
