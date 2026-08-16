@@ -74,7 +74,7 @@ dependencies {
     implementation 'software.amazon.awssdk:s3'
 
     // API 문서 (Swagger UI)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
 
     // 공공데이터 CSV 인제스천 (표준데이터셋 파싱)
     implementation 'org.apache.commons:commons-csv:1.14.1'
