@@ -8,7 +8,9 @@ onlyBuiltDependencies:
 # Next.js 의 전이 의존성까지 최소 보안 버전으로 수렴시킨다.
 # PostCSS 8 API 호환 버전으로 해석해 GHSA-qx2v-qp2m-jg93을 제거한다.
 overrides:
-  brace-expansion: 5.0.8
+  brace-expansion: 5.0.9
+  js-yaml: 4.3.1
+  nanoid: 3.3.18
   postcss: 8.5.23
   sharp: 0.35.3
 

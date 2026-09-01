@@ -97,7 +97,7 @@ for path in "$dump_path" "$checksum_path" "$counts_path"; do
     "s3://${bucket}/${remote_prefix}/$(basename "$path")" --only-show-errors
 done
 
-local_size="$(stat -f '%z' "$dump_path" 2>/dev/null || stat -c '%s' "$dump_path")"
+local_size="$(portable_file_size "$dump_path")"
 remote_size="$(
   docker run --rm --env-file "$aws_env" \
     --env AWS_DEFAULT_REGION="$region" --env AWS_EC2_METADATA_DISABLED=true \

@@ -11,6 +11,32 @@ resolve_compose() {
   fi
 }
 
+portable_file_mode() {
+  local path="$1"
+  local mode=""
+
+  if mode="$(stat -c '%a' "$path" 2>/dev/null)"; then
+    printf '%s' "$mode"
+  elif mode="$(stat -f '%Lp' "$path" 2>/dev/null)"; then
+    printf '%s' "$mode"
+  else
+    return 1
+  fi
+}
+
+portable_file_size() {
+  local path="$1"
+  local size=""
+
+  if size="$(stat -c '%s' "$path" 2>/dev/null)"; then
+    printf '%s' "$size"
+  elif size="$(stat -f '%z' "$path" 2>/dev/null)"; then
+    printf '%s' "$size"
+  else
+    return 1
+  fi
+}
+
 require_regular_0600_file() {
   local path="$1"
   local label="$2"
@@ -18,7 +44,7 @@ require_regular_0600_file() {
 
   [[ "$path" == /* ]] || { printf '%s path must be absolute.\n' "$label" >&2; return 1; }
   [[ -f "$path" && ! -L "$path" ]] || { printf '%s must be a regular non-symlink file.\n' "$label" >&2; return 1; }
-  mode="$(stat -f '%Lp' "$path" 2>/dev/null || stat -c '%a' "$path")"
+  mode="$(portable_file_mode "$path")"
   [[ "$mode" == "600" ]] || { printf '%s mode must be 0600.\n' "$label" >&2; return 1; }
 }
 
@@ -34,4 +60,3 @@ read_env_value() {
   [[ -n "$value" ]] || { printf '%s must not be empty.\n' "$key" >&2; return 1; }
   printf '%s' "$value"
 }
-

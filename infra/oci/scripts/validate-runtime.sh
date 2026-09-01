@@ -5,6 +5,8 @@ readonly script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly oci_dir="$(cd -- "${script_dir}/.." && pwd)"
 readonly env_file="${1:-}"
 
+source "${script_dir}/runtime-lib.sh"
+
 fail() {
   printf 'OCI runtime validation failed: %s\n' "$1" >&2
   exit 1
@@ -13,7 +15,7 @@ fail() {
 [[ -n "$env_file" ]] || fail "usage: validate-runtime.sh /absolute/path/production.env"
 [[ "$env_file" == /* ]] || fail "environment file path must be absolute"
 [[ -f "$env_file" && ! -L "$env_file" ]] || fail "environment file must be a regular non-symlink file"
-[[ "$(stat -f '%Lp' "$env_file" 2>/dev/null || stat -c '%a' "$env_file")" == "600" ]] \
+[[ "$(portable_file_mode "$env_file")" == "600" ]] \
   || fail "environment file mode must be 0600"
 [[ -z "$(LC_ALL=C tr -d '\11\12\15\40-\176' <"$env_file")" ]] \
   || fail "environment file contains unsupported control bytes"

@@ -45,7 +45,7 @@ jobs:
           find infra/oci -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           python3 -m unittest discover -s infra/oci/tests -p 'test_*.py'
           terraform -chdir=infra/oci/terraform fmt -check
-          terraform -chdir=infra/oci/terraform init -backend=false -input=false
+          terraform -chdir=infra/oci/terraform init -backend=false -input=false -lockfile=readonly
           terraform -chdir=infra/oci/terraform validate
 
   deploy:

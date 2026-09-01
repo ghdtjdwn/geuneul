@@ -63,7 +63,7 @@ jobs:
       - name: Validate Terraform
         run: |
           terraform -chdir=infra/oci/terraform fmt -check
-          terraform -chdir=infra/oci/terraform init -backend=false -input=false
+          terraform -chdir=infra/oci/terraform init -backend=false -input=false -lockfile=readonly
           terraform -chdir=infra/oci/terraform validate
       - name: Validate migration scripts
         run: |
