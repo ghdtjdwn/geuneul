@@ -1,0 +1,13 @@
+[Unit]
+Description=Geuneul production health and backup freshness check
+After=docker.service
+Requires=docker.service
+ConditionPathExists=/opt/marketvalley/geuneul/current
+
+[Service]
+Type=oneshot
+Environment=DOCKER_HOST=unix://%t/docker.sock
+ExecStart=/usr/local/lib/geuneul/check-production-health.sh
+TimeoutStartSec=5m
+StandardOutput=journal
+StandardError=journal

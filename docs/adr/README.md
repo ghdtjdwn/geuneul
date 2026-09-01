@@ -36,3 +36,4 @@
 | [0029](./0029-rds-encryption-backup-snapshot-restore.md) | RDS 저장 암호화 + 자동 백업 — 스냅샷을 KMS 암호화 복사 후 복원(무손실), 프리티어 retention 1일 | 승인·라이브 |
 | [0030](./0030-ingest-operational-ledger-deterministic-load.md) | 인제스천 운영 원장 + 결정적 공간 부하 입력 — retry/dead-letter/freshness와 seed 기반 JSON summary | 승인·운영 적용 완료(로컬 실 PostGIS·30만 부하 검증) |
 | [0031](./0031-security-boundaries-session-upload-rate-limit.md) | 업로드 claim·서버 세션 폐기·Redis 분산 레이트리밋·운영 Swagger 기본 차단 | 승인·구현 완료(운영 미적용) |
+| [0032](./0032-oci-arm64-self-hosted-migration.md) | Vercel 프론트 유지 + OCI ARM64 rootless Compose·Object Storage로 무손실 이전 | 승인·구현 및 로컬 복원 검증 완료(라이브 이전 대기) |

@@ -1,0 +1,8 @@
+region           = "ap-chuncheon-1"
+tenancy_ocid     = "ocid1.tenancy.oc1..replace-with-real-ocid"
+compartment_ocid = "ocid1.compartment.oc1..replace-with-real-ocid"
+
+photos_bucket_name  = "geuneul-photos"
+backups_bucket_name = "geuneul-backups"
+
+backup_retention_days = 14

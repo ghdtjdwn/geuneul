@@ -103,10 +103,18 @@ geuneul:
 
 aws:
   s3:
-    # 제보/후기 사진 버킷(P2 presign). 비면 PhotoService가 호출 시점에 명확히 실패(JwtService와 동일한
-    # 지연 검증 패턴 — 값 주입 전 배포돼도 앱 자체는 뜬다). 값은 terraform output(s3_photos_bucket)로 확정.
+    # AWS S3와 OCI Object Storage S3 compatibility API를 같은 SigV4 경로로 지원한다. endpoint가 비면
+    # 기존 AWS 동작, 지정되면 해당 S3 호환 저장소를 사용한다. legacy-base-urls는 AWS→OCI 컷오버 뒤에도
+    # DB에 저장된 예전 AWS object URL에서 key를 추출해 새 저장소 GET 서명을 발급하기 위한 호환 목록이다.
     bucket: ${S3_BUCKET_NAME:}
-    region: ${AWS_REGION:ap-northeast-2}
+    region: ${S3_REGION:${AWS_REGION:ap-northeast-2}}
+    endpoint: ${S3_ENDPOINT:}
+    path-style: ${S3_PATH_STYLE:false}
+    public-base-url: ${S3_PUBLIC_BASE_URL:}
+    legacy-base-urls: ${S3_LEGACY_BASE_URLS:}
+    # OCI Object Storage에는 bucket CORS API가 없다. 운영에서는 Caddy의 고정 upstream upload gateway를
+    # 지정해 presigned URL의 path/query를 유지하고 브라우저에 exact-origin CORS만 제공한다.
+    browser-upload-proxy-base-url: ${S3_BROWSER_UPLOAD_PROXY_BASE_URL:}
 
 springdoc:
   api-docs:

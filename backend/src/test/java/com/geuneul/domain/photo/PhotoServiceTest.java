@@ -10,8 +10,10 @@ import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
+import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -33,6 +35,16 @@ class PhotoServiceTest {
     private static S3Presigner fakePresigner() {
         return S3Presigner.builder()
                 .region(Region.AP_NORTHEAST_2)
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("test-access-key", "test-secret-key")))
+                .build();
+    }
+
+    private static S3Presigner fakeOciPresigner() {
+        return S3Presigner.builder()
+                .region(Region.of("ap-chuncheon-1"))
+                .endpointOverride(URI.create("https://namespace.compat.objectstorage.ap-chuncheon-1.oci.customer-oci.com"))
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create("test-access-key", "test-secret-key")))
                 .build();
@@ -174,5 +186,51 @@ class PhotoServiceTest {
         assertThat(signed).hasSize(2);
         assertThat(signed.get(0)).contains("X-Amz-Signature=");
         assertThat(signed.get(1)).isEqualTo("https://external/b.jpg"); // 외부 URL은 통과
+    }
+
+    @Test
+    @DisplayName("OCI S3 호환 endpoint는 path-style PUT을 서명하고 AWS 레거시 URL도 새 저장소 GET으로 변환한다")
+    void ociCompatibilityEndpointAndLegacyUrl() {
+        PhotoService service = new PhotoService(
+                fakeOciPresigner(),
+                "geuneul-photos",
+                "ap-chuncheon-1",
+                "https://namespace.compat.objectstorage.ap-chuncheon-1.oci.customer-oci.com",
+                "",
+                "https://geuneul-photos.s3.ap-northeast-2.amazonaws.com",
+                "https://api.geuneul.example/object-storage",
+                CLOCK,
+                mock(PhotoUploadService.class));
+
+        PhotoPresignResponse upload = service.presign(
+                new PhotoPresignRequest("image/jpeg", 100L, "report"), null, "x:test");
+        assertThat(upload.uploadUrl()).startsWith(
+                "https://api.geuneul.example/object-storage/geuneul-photos/report/");
+        assertThat(upload.uploadUrl()).contains("X-Amz-Signature=");
+        assertThat(upload.objectUrl()).startsWith(
+                "https://namespace.compat.objectstorage.ap-chuncheon-1.oci.customer-oci.com/geuneul-photos/report/");
+
+        String signedLegacy = service.presignGet(
+                "https://geuneul-photos.s3.ap-northeast-2.amazonaws.com/review/abc.jpg");
+        assertThat(signedLegacy).startsWith(
+                "https://namespace.compat.objectstorage.ap-chuncheon-1.oci.customer-oci.com/geuneul-photos/review/abc.jpg");
+        assertThat(signedLegacy).contains("X-Amz-Signature=");
+    }
+
+    @Test
+    @DisplayName("브라우저 upload gateway는 query·fragment·userinfo 없는 HTTPS URL만 허용한다")
+    void uploadProxyMustBeSafeHttpsBase() {
+        assertThatThrownBy(() -> new PhotoService(
+                fakeOciPresigner(),
+                "geuneul-photos",
+                "ap-chuncheon-1",
+                "https://namespace.compat.objectstorage.ap-chuncheon-1.oci.customer-oci.com",
+                "",
+                "",
+                "https://user@example.com/object-storage?unsafe=true",
+                CLOCK,
+                mock(PhotoUploadService.class)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("S3_BROWSER_UPLOAD_PROXY_BASE_URL");
     }
 }

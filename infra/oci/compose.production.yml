@@ -1,0 +1,199 @@
+name: ${COMPOSE_PROJECT_NAME:-geuneul}
+
+services:
+  postgres:
+    image: geuneul-postgis:16.15-3.6.4
+    build:
+      context: ./postgis
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_DB: geuneul
+      POSTGRES_USER: geuneul_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}
+      GEUNEUL_DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    command:
+      - postgres
+      - -c
+      - max_connections=40
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - wal_compression=on
+      - -c
+      - log_min_duration_statement=1000
+    restart: unless-stopped
+    cpus: "0.35"
+    mem_limit: 1280m
+    memswap_limit: 1280m
+    mem_reservation: 512m
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geuneul_admin -d geuneul"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    stop_grace_period: 60s
+    networks:
+      - data
+    logging: &bounded-logs
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  redis:
+    image: redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    # Run as the image's redis account from process start; otherwise cap_drop=ALL
+    # prevents the root entrypoint from calling setpriv to change uid/gid.
+    user: "999:1000"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    restart: unless-stopped
+    cpus: "0.10"
+    mem_limit: 192m
+    memswap_limit: 192m
+    mem_reservation: 64m
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    stop_grace_period: 20s
+    networks:
+      - data
+    logging: *bounded-logs
+
+  app:
+    image: geuneul-backend:${APP_IMAGE_TAG:?APP_IMAGE_TAG is required}
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8080"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: geuneul
+      DB_USERNAME: geuneul_app
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_SSL: "false"
+      MANAGEMENT_EXPOSURE: health,info
+      MANAGEMENT_HEALTH_REDIS_ENABLED: "true"
+      MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE: readinessState,db,redis
+      SPRINGDOC_ENABLED: "false"
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-168}
+      GEUNEUL_PROXY_SECRET: ${GEUNEUL_PROXY_SECRET:?GEUNEUL_PROXY_SECRET is required}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      KMA_SERVICE_KEY: ${KMA_SERVICE_KEY:-}
+      DATA_GO_KR_SERVICE_KEY: ${DATA_GO_KR_SERVICE_KEY:-}
+      SAFETYDATA_SERVICE_KEY: ${SAFETYDATA_SERVICE_KEY:-}
+      AI_SUMMARY_API_KEY: ${AI_SUMMARY_API_KEY:-}
+      AI_SUMMARY_BASE_URL: ${AI_SUMMARY_BASE_URL:-https://api.mistral.ai/v1}
+      AI_SUMMARY_MODEL: ${AI_SUMMARY_MODEL:-mistral-small-latest}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:?S3_BUCKET_NAME is required}
+      S3_REGION: ${S3_REGION:?S3_REGION is required}
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_PATH_STYLE: ${S3_PATH_STYLE:-true}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
+      S3_LEGACY_BASE_URLS: ${S3_LEGACY_BASE_URLS:-}
+      S3_BROWSER_UPLOAD_PROXY_BASE_URL: ${S3_BROWSER_UPLOAD_PROXY_BASE_URL:?S3_BROWSER_UPLOAD_PROXY_BASE_URL is required}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      PUSH_VAPID_PUBLIC_KEY_PEM: ${PUSH_VAPID_PUBLIC_KEY_PEM:-}
+      PUSH_VAPID_PRIVATE_KEY_PEM: ${PUSH_VAPID_PRIVATE_KEY_PEM:-}
+      PUSH_VAPID_SUBJECT: ${PUSH_VAPID_SUBJECT:-}
+      GEUNEUL_REALTIME_ENABLED: ${GEUNEUL_REALTIME_ENABLED:-true}
+      PHOTO_CLEANUP_ENABLED: ${PHOTO_CLEANUP_ENABLED:-true}
+      OTEL_TRACING_EXPORT_ENABLED: ${OTEL_TRACING_EXPORT_ENABLED:-false}
+      OTEL_METRICS_EXPORT_ENABLED: ${OTEL_METRICS_EXPORT_ENABLED:-false}
+      JAVA_TOOL_OPTIONS: >-
+        -XX:MaxRAMPercentage=70.0
+        -XX:+ExitOnOutOfMemoryError
+        -Djava.io.tmpdir=/tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    cpus: "0.55"
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    mem_reservation: 512m
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    ports:
+      - "${GEUNEUL_BIND_ADDRESS:?GEUNEUL_BIND_ADDRESS is required}:${GEUNEUL_APP_PORT:-13880}:8080/tcp"
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080;
+          printf 'GET /actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3;
+          head -1 <&3 | grep -q ' 200 '
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 45s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    stop_grace_period: 45s
+    networks:
+      - data
+      - egress
+    logging: *bounded-logs
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  data:
+    internal: true
+  egress:

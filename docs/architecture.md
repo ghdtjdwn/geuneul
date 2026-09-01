@@ -1,6 +1,8 @@
 # 아키텍처 — 그늘(Geuneul)
 
 > 런타임 데이터 흐름 + 배포 파이프라인. 핵심(PostGIS 대용량 지리검색 · 실시간 UGC 시공간 스코어링)이 어디서 돌고, 요청이 브라우저에서 DB까지 어떻게 흐르는지 한 장으로.
+
+> 이전 상태(2026-09-01): 아래 AWS 다이어그램은 보존해야 할 source 구조다. AWS Free plan 종료로 backend는 중단됐고, Vercel frontend/BFF를 유지한 채 OCI ARM64 rootless Compose·Object Storage로 옮기는 중이다. target 구조와 zero-loss/cutover 게이트는 [ADR-0032](./adr/0032-oci-arm64-self-hosted-migration.md)와 [OCI 마이그레이션 런북](./OCI-MIGRATION.md)을 따른다. 라이브 컷오버 전에는 이 다이어그램을 OCI 운영 완료로 해석하지 않는다.
 > 결정 근거는 각 노드의 ADR 링크 참고([색인](./adr/README.md)).
 
 ## 전체 구성
@@ -85,20 +87,23 @@ flowchart TB
 ```mermaid
 flowchart LR
   DEV["git push / PR"]
-  GA["GitHub Actions<br/>Backend(Gradle JDK21)·Frontend CI<br/>Testcontainers(실 PostGIS)·gitleaks"]
-  OIDC["OIDC (키 없는 배포)"]
-  ECR["ECR"]
-  ECS["ECS Fargate<br/>Service Auto Scaling (ADR-0013)"]
-  TF["Terraform (IaC)"]
+  GA["GitHub Actions<br/>Backend·Frontend·Testcontainers<br/>ARM64 build/smoke·gitleaks"]
+  REL["bounded release archive<br/>ARM64 images·SHA-256·revision label"]
+  SSH["forced-command SSH<br/>stage · deploy · activate · rollback"]
+  OCI["OCI A1 rootless Compose<br/>Spring·PostGIS·Redis<br/>0.75 CPU · 3 GiB"]
+  OBJ["OCI Object Storage<br/>private versioned photos·backups"]
+  TF["Terraform<br/>bucket·versioning·lifecycle"]
 
-  DEV --> GA -->|OIDC| OIDC --> ECR --> ECS
-  TF -.provision.-> ECS
+  DEV --> GA --> REL --> SSH --> OCI
+  TF -.provision.-> OBJ
+  OCI --> OBJ
   GA --> VZ["Vercel 배포 (프론트)"]
 ```
 
-- **키 없는 배포** — GitHub Actions가 OIDC로 AWS 역할을 맡아 장기 자격증명 없이 ECR 푸시·ECS 롤아웃([DEPLOY.md](../DEPLOY.md)).
-- **IaC** — VPC·ALB·RDS·ElastiCache·S3·EventBridge·오토스케일링까지 Terraform으로 선언. 프론트는 Vercel, 로컬은 Docker Compose(PostGIS+Redis).
-- **CI 게이트** — 공간쿼리·인제스천은 Testcontainers 실 PostGIS로 검증. 머지 전 `gh pr checks`로 Backend/Frontend pass 눈확인(TS-025).
+- **분리된 stage와 activate** — GitHub가 만든 ARM64 image archive를 checksum·revision label로 검증해 먼저 stage한다. initial DB/object 복원 뒤 같은 Git SHA만 activate하며, 이후 deploy는 health 실패 시 이전 release를 재기동한다([ADR-0032](./adr/0032-oci-arm64-self-hosted-migration.md)).
+- **제한된 운영 경계** — SSH key는 shell을 열 수 없는 root-owned gateway에 묶이고, 전용 rootless user 전체에 CPU·메모리·swap 상한을 둔다. PostGIS·Redis는 외부 포트를 열지 않는다.
+- **IaC** — private photos/backups bucket, 분리된 app/backup IAM, versioning과 lifecycle은 Terraform으로 관리한다. OCI에 bucket CORS API가 없어 브라우저 PUT만 자격증명 없는 Caddy gateway가 exact-origin preflight와 signed Host 전달을 담당한다.
+- **CI 게이트** — 공간쿼리·인제스천은 Testcontainers 실 PostGIS로, OCI 경로는 ARM64 PostGIS 기동·backend image build·Terraform·shell/Python 보안 테스트로 검증한다. 머지 전 `gh pr checks`로 Backend/Frontend를 확인한다(TS-025).
 - **무료 설치·배포** — `/install`에서 스토어 없이 $0 설치: 안드로이드 **WebAPK 원탭**(Chrome이 진짜 설치 앱 생성) + **다운로드 서명 APK**(Bubblewrap TWA, `/geuneul.apk` + `/.well-known/assetlinks.json` 도메인 검증) + iOS 홈 화면 추가. 서명 keystore는 레포 밖(로컬 비밀 저장소)에만 둔다.
 
 ---

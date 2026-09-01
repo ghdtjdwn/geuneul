@@ -3,6 +3,7 @@ package com.geuneul.domain.photo;
 import com.geuneul.domain.auth.JwtService;
 import com.geuneul.domain.photo.dto.PhotoPresignRequest;
 import com.geuneul.domain.photo.dto.PhotoPresignResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -17,8 +18,13 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
@@ -26,7 +32,8 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 /**
  * 제보/후기 사진 업로드 — S3 presigned PUT URL 발급(docs/SPEC.md §7·§9 POST /photos/presign).
- * 백엔드는 파일 바이트를 절대 거치지 않는다: 브라우저가 이 서비스가 서명한 URL로 S3에 직접 PUT한다.
+ * 백엔드는 파일 바이트를 거치지 않는다. 브라우저는 이 서비스가 서명한 URL로 PUT하며, CORS를 제공하지
+ * 않는 저장소에서는 자격증명 없는 고정 upstream Caddy gateway가 Host를 원래 endpoint로 복원해 전달한다.
  *
  * <p>제약(발급 시 계약하고 UGC 저장 직전에 S3 HEAD로 다시 검증한다):
  * <ul>
@@ -64,19 +71,34 @@ public class PhotoService {
 
     private final S3Presigner presigner;
     private final String bucket;
-    private final String region;
+    private final String objectBaseUrl;
+    private final String browserUploadProxyBaseUrl;
+    private final Set<String> acceptedObjectBaseUrls;
     private final Clock clock;
     private final PhotoUploadService uploadService;
 
+    @Autowired
     public PhotoService(S3Presigner presigner,
                         @Value("${aws.s3.bucket:}") String bucket,
                         @Value("${aws.s3.region:ap-northeast-2}") String region,
+                        @Value("${aws.s3.endpoint:}") String endpoint,
+                        @Value("${aws.s3.public-base-url:}") String publicBaseUrl,
+                        @Value("${aws.s3.legacy-base-urls:}") String legacyBaseUrls,
+                        @Value("${aws.s3.browser-upload-proxy-base-url:}") String browserUploadProxyBaseUrl,
                         Clock clock, PhotoUploadService uploadService) {
         this.presigner = presigner;
         this.bucket = bucket;
-        this.region = region;
+        this.objectBaseUrl = resolveObjectBaseUrl(bucket, region, endpoint, publicBaseUrl);
+        this.browserUploadProxyBaseUrl = normalizeBrowserUploadProxyBaseUrl(browserUploadProxyBaseUrl);
+        this.acceptedObjectBaseUrls = acceptedBaseUrls(this.objectBaseUrl, legacyBaseUrls);
         this.clock = clock;
         this.uploadService = uploadService;
+    }
+
+    /** 기존 단위 테스트와 임베딩 호출의 AWS 기본 동작을 보존한다. Spring은 위 생성자를 사용한다. */
+    public PhotoService(S3Presigner presigner, String bucket, String region,
+                        Clock clock, PhotoUploadService uploadService) {
+        this(presigner, bucket, region, "", "", "", "", clock, uploadService);
     }
 
     /** purpose=REVIEW는 인증 주체가 필수이며, 발급 결과는 서버 upload claim에 함께 기록한다. */
@@ -126,7 +148,7 @@ public class PhotoService {
         uploadService.register(key, objectUrl, purpose, principal, clientKey,
                 request.contentType(), request.contentLength());
 
-        return new PhotoPresignResponse(presigned.url().toExternalForm(), objectUrl, key, expiresAt);
+        return new PhotoPresignResponse(browserUploadUrl(presigned), objectUrl, key, expiresAt);
     }
 
     /**
@@ -141,17 +163,13 @@ public class PhotoService {
         if (!StringUtils.hasText(storedUrl) || !StringUtils.hasText(bucket)) {
             return storedUrl;
         }
-        String prefix = objectUrlFor("");
-        if (!storedUrl.startsWith(prefix)) {
-            return storedUrl;
-        }
-        String key = storedUrl.substring(prefix.length());
+        Optional<String> key = objectKeyFrom(storedUrl);
         if (key.isEmpty()) {
             return storedUrl;
         }
         GetObjectRequest getRequest = GetObjectRequest.builder()
                 .bucket(bucket)
-                .key(key)
+                .key(key.get())
                 .build();
         GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
                 .signatureDuration(VIEW_SIGNATURE_DURATION)
@@ -169,6 +187,71 @@ public class PhotoService {
     }
 
     private String objectUrlFor(String key) {
-        return "https://%s.s3.%s.amazonaws.com/%s".formatted(bucket, region, key);
+        return objectBaseUrl + "/" + key;
+    }
+
+    private String browserUploadUrl(PresignedPutObjectRequest presigned) {
+        String directUrl = presigned.url().toExternalForm();
+        if (!StringUtils.hasText(browserUploadProxyBaseUrl)) {
+            return directUrl;
+        }
+        java.net.URI direct = java.net.URI.create(directUrl);
+        String query = StringUtils.hasText(direct.getRawQuery()) ? "?" + direct.getRawQuery() : "";
+        return browserUploadProxyBaseUrl + direct.getRawPath() + query;
+    }
+
+    private Optional<String> objectKeyFrom(String storedUrl) {
+        return acceptedObjectBaseUrls.stream()
+                .map(base -> base + "/")
+                .filter(storedUrl::startsWith)
+                .map(prefix -> storedUrl.substring(prefix.length()))
+                .filter(StringUtils::hasText)
+                .findFirst();
+    }
+
+    private static String resolveObjectBaseUrl(String bucket, String region,
+                                               String endpoint, String publicBaseUrl) {
+        if (StringUtils.hasText(publicBaseUrl)) {
+            return trimTrailingSlash(publicBaseUrl);
+        }
+        if (StringUtils.hasText(endpoint) && StringUtils.hasText(bucket)) {
+            return trimTrailingSlash(endpoint) + "/" + bucket;
+        }
+        return "https://%s.s3.%s.amazonaws.com".formatted(bucket, region);
+    }
+
+    private static Set<String> acceptedBaseUrls(String currentBaseUrl, String legacyBaseUrls) {
+        LinkedHashSet<String> bases = new LinkedHashSet<>();
+        bases.add(currentBaseUrl);
+        if (StringUtils.hasText(legacyBaseUrls)) {
+            Arrays.stream(legacyBaseUrls.split(","))
+                    .map(String::trim)
+                    .filter(StringUtils::hasText)
+                    .map(PhotoService::trimTrailingSlash)
+                    .forEach(bases::add);
+        }
+        return Collections.unmodifiableSet(bases);
+    }
+
+    private static String trimTrailingSlash(String value) {
+        String normalized = value.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private static String normalizeBrowserUploadProxyBaseUrl(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = trimTrailingSlash(value);
+        java.net.URI uri = java.net.URI.create(normalized);
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || !StringUtils.hasText(uri.getHost())
+                || uri.getRawQuery() != null || uri.getRawFragment() != null || uri.getUserInfo() != null) {
+            throw new IllegalArgumentException(
+                    "S3_BROWSER_UPLOAD_PROXY_BASE_URL must be an HTTPS origin/path without query, fragment, or user info");
+        }
+        return normalized;
     }
 }

@@ -363,9 +363,8 @@ export async function presignPhoto(params: {
   return res.json() as Promise<PhotoPresignResult>;
 }
 
-// presign으로 받은 URL에 파일을 직접 PUT — 서명 시 실은 Content-Type/Content-Length와 정확히 일치해야
-// S3가 받아준다(PhotoService 주석 참고). 이 요청은 동일 오리진 프록시를 거치지 않고 S3로 바로 나간다
-// (presigned URL 자체가 인가 수단이라 BFF를 거칠 이유가 없다 — 오히려 대용량 바이너리가 Vercel 함수를 왕복하지 않아 유리).
+// presign으로 받은 URL에 파일을 PUT한다. AWS에서는 저장소 직통 URL이고, OCI에서는 exact-origin CORS만
+// 제공하는 자격증명 없는 Caddy gateway URL이다. 두 경우 모두 저장소가 서명·Content-Type·길이·불변성을 검증한다.
 export async function uploadPhotoToS3(presigned: PhotoPresignResult, file: File): Promise<void> {
   const res = await fetch(presigned.uploadUrl, {
     method: "PUT",
