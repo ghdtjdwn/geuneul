@@ -34,7 +34,7 @@ checksum_filename="${checksum_filename#\*}"
   || fail "checksum entry must name the supplied dump basename"
 actual_digest="$(sha256sum "$dump_path" | awk '{ print $1 }')"
 [[ "$actual_digest" == "$expected_digest" ]] || fail "dump checksum does not match"
-resolve_compose
+resolve_compose "$oci_dir"
 
 if [[ -n "$(GEUNEUL_ENV_FILE="$env_file" "${COMPOSE[@]}" \
   --env-file "$env_file" --file "${oci_dir}/compose.production.yml" \

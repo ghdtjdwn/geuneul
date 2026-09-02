@@ -28,5 +28,5 @@ CREATE TABLE notification_deliveries (
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL DEFAULT now(),
     CONSTRAINT uq_notification_deliveries_dedup UNIQUE (dedup_key)
 );
--- 알림 센터 = user_id 최신순. 전체스캔 방지(인덱스 원칙).
+-- 알림 센터 = user_id 최신순. 전체스캔 방지(CLAUDE.md §0.4).
 CREATE INDEX idx_notification_deliveries_user ON notification_deliveries (user_id, created_at DESC);

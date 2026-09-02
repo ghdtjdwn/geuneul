@@ -16,7 +16,7 @@
 -- 왜 부분 인덱스(WHERE expires_at > now())가 아니라 전체 btree인가: now()는 STABLE/VOLATILE라 인덱스
 -- predicate(IMMUTABLE만 허용)에 넣을 수 없다. expires_at 전체 btree면 `expires_at > now()` 범위 스캔으로
 -- 유효 행만 읽어 목적을 동일하게 달성한다(유효 비율이 낮을수록 이득이 커지는, 프로덕션 누적 시나리오에 정확히 부합).
--- 인덱스 원칙 "애플리케이션 레벨에서 전체 스캔하지 않는다"의 인덱스 원칙을 뷰의 시간 필터에도 적용.
+-- CLAUDE.md §0.4 "애플리케이션 레벨에서 전체 스캔하지 않는다"의 인덱스 원칙을 뷰의 시간 필터에도 적용.
 CREATE INDEX idx_reports_expires ON reports (expires_at);
 
 COMMENT ON INDEX idx_reports_expires IS

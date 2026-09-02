@@ -24,7 +24,7 @@ exec 9>"${backup_root}/.backup.lock"
 flock --nonblock 9 || fail "another database backup is already running"
 
 "${script_dir}/validate-runtime.sh" "$env_file"
-resolve_compose
+resolve_compose "$oci_dir"
 
 database_size="$("${COMPOSE[@]}" --env-file "$env_file" --file "${oci_dir}/compose.production.yml" \
   exec -T postgres psql --username geuneul_app --dbname geuneul \

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 resolve_compose() {
+  local project_directory="${1:-}"
   if docker compose version >/dev/null 2>&1; then
     COMPOSE=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
@@ -8,6 +9,9 @@ resolve_compose() {
   else
     printf 'Docker Compose v2 is unavailable.\n' >&2
     return 1
+  fi
+  if [[ -n "$project_directory" ]]; then
+    COMPOSE+=(--project-directory "$project_directory")
   fi
 }
 
@@ -49,14 +53,14 @@ require_regular_0600_file() {
 }
 
 read_env_value() {
-  local env_file="$1"
+  local config_path="$1"
   local key="$2"
   local count=""
   local value=""
 
-  count="$(grep -c "^${key}=" "$env_file" || true)"
+  count="$(grep -c "^${key}=" "$config_path" || true)"
   [[ "$count" == "1" ]] || { printf '%s must appear exactly once.\n' "$key" >&2; return 1; }
-  value="$(sed -n "s/^${key}=//p" "$env_file" | tr -d '\r')"
+  value="$(sed -n "s/^${key}=//p" "$config_path" | tr -d '\r')"
   [[ -n "$value" ]] || { printf '%s must not be empty.\n' "$key" >&2; return 1; }
   printf '%s' "$value"
 }

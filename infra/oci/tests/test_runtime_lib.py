@@ -34,6 +34,28 @@ class RuntimeLibraryTest(unittest.TestCase):
 
             self.assertEqual("600 3", result.stdout)
 
+    def test_read_env_value_does_not_collide_with_readonly_caller_variable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = pathlib.Path(directory) / "production.env"
+            candidate.write_text("SAMPLE_VALUE=expected\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'readonly env_file="caller-value"; source "$1"; read_env_value "$2" SAMPLE_VALUE',
+                    "runtime-test",
+                    str(RUNTIME_LIB),
+                    str(candidate),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual("expected", result.stdout)
+            self.assertEqual("", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
