@@ -68,7 +68,8 @@ jobs:
       - name: Validate migration scripts
         run: |
           find infra/oci -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
-          python3 -m unittest discover -s infra/oci/tests -p 'test_*.py'
+          GEUNEUL_CADDY_INTEGRATION=1 \
+            python3 -m unittest discover -s infra/oci/tests -p 'test_*.py'
       - name: Validate production Compose contract
         run: |
           env_file="$(mktemp)"

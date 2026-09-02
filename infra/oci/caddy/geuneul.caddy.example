@@ -1,6 +1,19 @@
-# Merge this site block into the existing OCI edge Caddyfile. The gateway has
+# Merge this global logger filter and site block into the existing OCI edge
+# Caddyfile. If a global block already exists, merge the `log default` option
+# into it. The gateway has
 # no Object Storage credentials: OCI still validates the complete SigV4 query,
 # signed headers, conditional create, content type, and content length.
+{
+	# reverse_proxy failures are runtime logs rather than access logs, so redact
+	# query values in the default logger as well as the site access logger.
+	log default {
+		format filter {
+			request>uri regexp `\?.*$` `?REDACTED`
+			wrap json
+		}
+	}
+}
+
 {$GEUNEUL_SITE_ADDRESS} {
 	encode zstd gzip
 
@@ -61,6 +74,12 @@
 
 	log {
 		output stdout
-		format json
+		# Keep paths for diagnosis but remove every query value from both access
+		# and reverse-proxy error entries. log_skip below still removes successful
+		# upload gateway access entries entirely.
+		format filter {
+			request>uri regexp `\?.*$` `?REDACTED`
+			wrap json
+		}
 	}
 }

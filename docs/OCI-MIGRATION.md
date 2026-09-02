@@ -19,8 +19,8 @@
 5. Vercel 사용자 흐름과 rollback을 확인하기 전에는 AWS 원본·snapshot·S3 object를 삭제하지 않는다.
 6. 모든 production 변경은 적용 직전 plan 또는 exact target을 다시 확인하고, 값이 있는 로그를 남기지 않는다.
 7. 정상 운영은 AWS·OCI 인프라 비용 0원이다. OCI boot+block 합계 200GB와 Object Storage 합계 20GB를 넘거나 Cost Analysis에 billable usage가 있으면 activate하지 않는다.
-8. production workflow는 `main` ref에서만 실행한다. `stage`는 image와 release file만 적재하며 service를 시작하지 않는다.
-9. application을 시작하기 직전에 release별 불변 marker와 함께 검증된 off-host logical backup을 완료한다. 같은 release 재시도는 marker가 가리키는 기존 pre-deploy backup을 유지한다. Flyway 적용 뒤에는 이전 binary를 자동 시작하지 않으며, 이전 backup을 빈 DB에 명시적으로 복원·검증한 뒤에만 이전 binary를 시작할 수 있다.
+8. production workflow는 `main` ref에서만 실행한다. GitHub `Production` environment에도 main-only deployment branch policy와 required reviewer를 설정하기 전에는 dispatch하지 않는다. `stage`는 image와 release file만 적재하며 service를 시작하지 않는다.
+9. application 쓰기를 먼저 정지한 뒤 release별 불변 marker와 함께 검증된 off-host logical backup을 완료한다. 같은 release 재시도도 object HEAD, nonzero size, retention age와 원격 dump SHA-256을 다시 검증한다. Backup이 실패하면 schema가 바뀌기 전이므로 이전 app만 재기동하고, Flyway 적용 뒤에는 이전 binary를 자동 시작하지 않는다. 이전 backup을 빈 DB에 명시적으로 복원·검증한 뒤에만 이전 binary를 시작할 수 있다.
 
 ## 0. OCI 0원 운영 선행 조건
 
@@ -60,13 +60,13 @@ OBJECT_MIGRATION_CONFIRM=MIGRATE_GEUNEUL_OBJECTS \
 
 1. `infra/oci/terraform/terraform.tfvars.example`을 `.local`에 복사해 실제 compartment와 이름을 채운다.
 2. `terraform init`, `fmt -check`, `validate`, 저장 plan을 검토한 뒤 photos/backups bucket과 lifecycle만 적용한다.
-3. OCI에는 bucket CORS API가 없으므로 `infra/oci/caddy/geuneul.caddy.example`의 `/object-storage/*` gateway를 기존 Caddy에 합친다. Vercel production origin의 OPTIONS/PUT만 CORS로 허용하고, upstream은 고정 OCI S3 endpoint·Host로 설정한다. gateway에는 저장소 자격증명을 두지 않는다.
+3. OCI에는 bucket CORS API가 없으므로 `infra/oci/caddy/geuneul.caddy.example`의 global logger filter와 `/object-storage/*` gateway를 기존 Caddy에 합친다. Vercel production origin의 OPTIONS/PUT만 CORS로 허용하고, upstream은 고정 OCI S3 endpoint·Host로 설정한다. gateway에는 저장소 자격증명을 두지 않는다. Upload access log는 제외하고 reverse-proxy error log를 포함한 나머지 log의 query 값은 모두 `REDACTED`로 치환한다.
 4. photo app user와 backup writer user에 각각 별도 OCI Customer Secret Key를 만들고 즉시 server mode-0600 environment에 저장한다. app user는 photos bucket만, backup writer는 backups bucket의 non-delete 권한만 가져야 한다. secret은 다시 볼 수 없으므로 안전한 로컬 secret store에도 1회 백업한다.
 5. 배포 전용 Ed25519 key pair를 만들고 public key만 서버 임시 경로로 전달한다. private key는 로컬과 GitHub production environment secret에만 저장한다.
 6. `GEUNEUL_DEPLOY_PUBLIC_KEY_FILE`을 지정해 `infra/oci/server/bootstrap-ubuntu-rootless.sh`를 root로 실행한다. 스크립트는 기존 `/opt/marketvalley`를 포맷하거나 재마운트하지 않고 전용 rootless user·`/opt/marketvalley/geuneul`·forced-command gateway를 만든다. user cgroup은 memory 3GiB, CPU 75%, swap 0이고 공유 volume root ACL은 해당 user의 path traversal만 허용한다.
 7. `/opt/marketvalley/geuneul/shared/production.env`의 모든 placeholder를 실제 값으로 교체하고 mode 0600을 재확인한다. `infra/oci/scripts/validate-runtime.sh`가 성공하기 전에는 release를 activate하지 않는다.
-8. GitHub production environment에 `OCI_DEPLOY_HOST`, `OCI_DEPLOY_USER`, `OCI_DEPLOY_SSH_PRIVATE_KEY`, pin된 `OCI_DEPLOY_HOST_KEY`를 등록한다. 첫 workflow dispatch는 `main`에서 반드시 `stage`로 실행한다. workflow는 ARM64 image archive를 checksum 검증해 적재할 뿐 PostgreSQL·Redis·app을 시작하지 않는다. 별도 승인 뒤 restricted `start-data <full-git-sha>`로 PostgreSQL·Redis만 `--no-build` 기동한다.
-9. `/opt/marketvalley/geuneul/releases/<full-git-sha>/infra/oci/compose.production.yml`을 source of truth로 아래 절차에서 DB를 복원한다. 검증이 끝난 뒤 restricted gateway의 `activate <full-git-sha>`로 첫 release를 시작한다. 이후 `activate`는 거부되며 일반 배포는 `main`의 `deploy`만 사용한다. `deploy`는 application 시작 직전 DB dump·checksum·table counts를 만들고 off-host HEAD size까지 검증한 후 `shared/predeploy-backup-<full-git-sha>`에 해당 backup marker를 고정한다. activation 실패 시 app을 정지하고 자동 binary rollback은 하지 않는다.
+8. GitHub production environment에 main-only deployment branch policy와 required reviewer를 먼저 설정한 뒤 `OCI_DEPLOY_HOST`, `OCI_DEPLOY_USER`, `OCI_DEPLOY_SSH_PRIVATE_KEY`, pin된 `OCI_DEPLOY_HOST_KEY`를 등록한다. 2026-09-02 read-back에서는 `Production` environment의 protection rule과 branch policy가 모두 비어 있었으므로 이 설정 전 dispatch는 차단 상태다. 첫 workflow dispatch는 `main`에서 반드시 `stage`로 실행한다. workflow는 ARM64 image archive를 checksum 검증해 적재할 뿐 PostgreSQL·Redis·app을 시작하지 않는다. 별도 승인 뒤 restricted `start-data <full-git-sha>`로 PostgreSQL·Redis만 `--no-build` 기동한다.
+9. `/opt/marketvalley/geuneul/releases/<full-git-sha>/infra/oci/compose.production.yml`을 source of truth로 아래 절차에서 DB를 복원한다. 검증이 끝난 뒤 restricted gateway의 `activate <full-git-sha>`로 첫 release를 시작한다. 이후 `activate`는 거부되며 일반 배포는 `main`의 `deploy`만 사용한다. `deploy`는 기존 app을 먼저 정지해 쓰기를 동결하고 DB dump·checksum·table counts를 만든다. Marker를 새로 만들거나 재사용할 때 모두 off-host object의 HEAD size·retention age·streaming SHA-256을 검증한다. Backup 검증 실패는 이전 app을 재기동하지만, activation 실패는 app을 정지하고 자동 binary rollback을 하지 않는다.
 10. Caddy에 새 HTTPS hostname과 VM private high-port upstream을 추가하고 Caddy validate 후 reload한다.
 11. bootstrap 전후 boot filesystem의 실제 free space와 inode 사용률을 기록한다. bootstrap, stage, data start, activate와 상시 health는 40GiB 미만 또는 inode 90% 초과면 실패해야 한다. 이 gate를 낮추지 않는다.
 12. 기존 k3s의 CPU request·Pending Pod와 host `MemAvailable`을 다시 기록한다. Geuneul 기동 뒤 기존 workload의 Pending/Unknown 수가 증가하거나 memory available이 1GiB 아래로 내려가면 activate를 중단하고 Geuneul을 정지한다.
@@ -102,7 +102,7 @@ OCI origin에서 아래를 확인한다.
 - 새 report/review 사진 gateway presign PUT, exact-origin preflight, upstream Host 보존, 중복 PUT 412, HEAD claim 검증
 - 로그인·로그아웃·기존 JWT·OAuth, report/review/bookmark/follow/notification
 - Redis rate limit과 캐시, SSE LISTEN/NOTIFY, scheduled ingestion dry run
-- 컨테이너 memory/CPU/PID, PostgreSQL connection와 volume 여유, Caddy access/error log. `/object-storage/*`는 SigV4 query credential 보호를 위해 access log에서 제외되어야 한다.
+- 컨테이너 memory/CPU/PID, PostgreSQL connection와 volume 여유, Caddy access/error log. `/object-storage/*`는 SigV4 query credential 보호를 위해 access log에서 제외하고 runtime/error log를 포함한 모든 URI query 값은 redaction해야 한다.
 
 ## 5. Git·CI·배포와 Vercel 컷오버
 
@@ -114,7 +114,7 @@ OCI origin에서 아래를 확인한다.
 
 rollback은 Vercel environment를 기존 CloudFront origin으로 되돌리고 redeploy하는 한 단계다. 단, AWS ECS/RDS가 동작하고 최종 dump 이후 OCI에만 생긴 write가 없을 때만 무손실 rollback이다. 컷오버 직후 write가 생기면 OCI가 새 source of truth이며 AWS로 단순 복귀하지 않는다.
 
-일반 OCI release의 Flyway 실행 뒤에는 이전 binary를 자동 시작하지 않는다. activation 실패 시 app은 정지된 상태로 남고, `backups/last-success`가 가리키는 배포 직전 dump·checksum·table counts와 off-host object를 먼저 확인한다. 이전 release로 복구하려면 application을 정지한 채 별도 빈 DB에 그 dump를 `RESTORE_CONFIRM=RESTORE_GEUNEUL`로 복원하고 `verify-database.sh`를 통과시킨 뒤, 운영자가 이전 binary와 복원된 schema의 호환성을 확인해 명시적으로 재기동한다. 기존 DB를 비우거나 교체하는 작업은 별도 파괴 승인 대상이며 restricted SSH gateway는 이를 자동화하지 않는다.
+일반 OCI release는 기존 app을 정지해 쓰기를 동결한 뒤 final backup을 만든다. Backup 또는 off-host 재검증이 실패하면 Flyway 실행 전이므로 이전 app을 다시 시작한다. Backup 검증이 끝난 뒤 Flyway를 실행한 경우에는 이전 binary를 자동 시작하지 않는다. activation 실패 시 app은 정지된 상태로 남고, release별 `shared/predeploy-backup-<full-git-sha>` marker가 가리키는 dump·checksum·table counts와 off-host object를 먼저 확인한다. 이전 release로 복구하려면 application을 정지한 채 별도 빈 DB에 그 dump를 `RESTORE_CONFIRM=RESTORE_GEUNEUL`로 복원하고 `verify-database.sh`를 통과시킨 뒤, 운영자가 이전 binary와 복원된 schema의 호환성을 확인해 명시적으로 재기동한다. 기존 DB를 비우거나 교체하는 작업은 별도 파괴 승인 대상이며 restricted SSH gateway는 이를 자동화하지 않는다. Release pruning은 current와 `previous-release`가 가리키는 recovery release의 archive·Compose·scripts·backend image를 검증하고 항상 보존한다.
 
 ## 6. 백업과 AWS 정리
 
@@ -125,7 +125,7 @@ rollback은 Vercel environment를 기존 CloudFront origin으로 되돌리고 re
 5. AWS source S3 삭제는 OCI object SHA-256과 off-host backup을 다시 확인하고 별도 파괴 승인 후에만 한다.
 6. 마지막 AWS bill, 잔존 resource inventory, OCI backup/restore evidence, Vercel production URL을 WORKLOG에 기록한다.
 
-`activate`는 첫 backup success marker가 없으면 즉시 한 번 백업하고, 이후 `geuneul-backup.timer`가 매일 실행한다. 아래 상태는 안정화와 운영 점검의 필수 증거다.
+모든 `activate`는 app 쓰기를 동결한 뒤 release별 off-host backup을 검증하고, 이후 `geuneul-backup.timer`가 매일 실행한다. 아래 상태는 안정화와 운영 점검의 필수 증거다.
 
 ```bash
 systemctl --user status geuneul-backup.timer geuneul-health.timer

@@ -47,7 +47,7 @@ configure_rootless_runtime() {
 
 require_runtime() {
   local user_cgroup="/sys/fs/cgroup/user.slice/user-${deploy_uid}.slice/user@${deploy_uid}.service"
-  for command_name in awk chmod docker find findmnt flock grep install ln mkdir mv python3 readlink rm sed seq sha256sum sleep sort stat tr; do
+  for command_name in awk chmod date docker find findmnt flock grep install ln mkdir mv python3 readlink rm sed seq sha256sum sleep sort stat tr wc; do
     command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is unavailable"
   done
   docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is unavailable"
@@ -121,7 +121,9 @@ validate_release() {
     backend-image.tar \
     postgis-image.tar \
     infra/oci/compose.production.yml \
-    infra/oci/scripts/validate-runtime.sh; do
+    infra/oci/scripts/validate-runtime.sh \
+    infra/oci/scripts/backup-database.sh \
+    infra/oci/scripts/verify-backup-object.sh; do
     [[ -f "${release_directory}/${file}" && ! -L "${release_directory}/${file}" ]] \
       || fail "release file ${file} is missing or unsafe"
   done
@@ -153,7 +155,9 @@ extract_release() {
     backend-image.tar \
     postgis-image.tar \
     infra/oci/compose.production.yml \
-    infra/oci/scripts/validate-runtime.sh; do
+    infra/oci/scripts/validate-runtime.sh \
+    infra/oci/scripts/backup-database.sh \
+    infra/oci/scripts/verify-backup-object.sh; do
     [[ -f "${incoming_directory}/${file}" && ! -L "${incoming_directory}/${file}" ]] \
       || fail "release file ${file} is missing or unsafe"
   done
@@ -197,6 +201,19 @@ read_current_release() {
     target="${target##*/}"
     is_release_sha "$target" || fail "current release link is invalid"
     printf '%s' "$target"
+  fi
+}
+
+read_previous_release() {
+  local release_sha=""
+  if [[ -e "$previous_release_file" || -L "$previous_release_file" ]]; then
+    [[ -f "$previous_release_file" && ! -L "$previous_release_file" ]] \
+      || fail "previous release record is unsafe"
+    [[ "$(wc -l <"$previous_release_file" | tr -d '[:space:]')" == "1" ]] \
+      || fail "previous release record is invalid"
+    release_sha="$(tr -d '\r\n' <"$previous_release_file")"
+    is_release_sha "$release_sha" || fail "previous release SHA is invalid"
+    printf '%s' "$release_sha"
   fi
 }
 
@@ -280,18 +297,35 @@ ensure_predeploy_backup() {
   local temporary_marker="${shared_directory}/.predeploy-backup-${release_sha}.$$"
   if [[ -f "$release_backup_marker" && ! -L "$release_backup_marker" ]]; then
     validate_backup_marker "$release_backup_marker"
-    return
+    "${releases_directory}/${release_sha}/infra/oci/scripts/verify-backup-object.sh" \
+      "$production_environment" "$release_backup_marker" || return $?
+    return 0
   fi
   [[ ! -e "$release_backup_marker" && ! -L "$release_backup_marker" ]] \
     || fail "pre-deploy backup marker path is unsafe"
   "${releases_directory}/${release_sha}/infra/oci/scripts/backup-database.sh" \
-    "$production_environment" "${deploy_root}/backups"
-  validate_backup_marker "$backup_status"
-  read -r backup_epoch backup_name backup_size backup_digest <"$backup_status"
+    "$production_environment" "${deploy_root}/backups" || return $?
+  validate_backup_marker "$backup_status" || return $?
+  read -r backup_epoch backup_name backup_size backup_digest <"$backup_status" || return $?
   printf '%s\t%s\t%s\t%s\n' "$backup_epoch" "$backup_name" "$backup_size" "$backup_digest" \
-    >"$temporary_marker"
-  chmod 0600 "$temporary_marker"
-  mv "$temporary_marker" "$release_backup_marker"
+    >"$temporary_marker" || return $?
+  chmod 0600 "$temporary_marker" || return $?
+  mv "$temporary_marker" "$release_backup_marker" || return $?
+  "${releases_directory}/${release_sha}/infra/oci/scripts/verify-backup-object.sh" \
+    "$production_environment" "$release_backup_marker" || return $?
+}
+
+freeze_application_writes() {
+  local release_sha="$1"
+  compose "$release_sha" stop app >/dev/null || return $?
+  [[ -z "$(compose "$release_sha" ps --status running --quiet app)" ]] \
+    || fail "application writes could not be frozen"
+}
+
+resume_previous_application() {
+  local release_sha="$1"
+  compose "$release_sha" up --detach --no-build --no-deps app >/dev/null || return $?
+  wait_for_healthy_app "$release_sha"
 }
 
 start_data_services() {
@@ -319,11 +353,23 @@ activate_release() {
   GEUNEUL_RELEASE_SHA="$release_sha" \
     "${releases_directory}/${release_sha}/infra/oci/scripts/validate-runtime.sh" "$production_environment"
   previous_sha="$(read_current_release)"
-  ensure_predeploy_backup "$release_sha"
+  if is_release_sha "$previous_sha"; then
+    freeze_application_writes "$previous_sha"
+  else
+    [[ -z "$(compose "$release_sha" ps --status running --quiet app)" ]] \
+      || fail "initial activation requires the application to remain stopped"
+  fi
+  if ! ensure_predeploy_backup "$release_sha"; then
+    if is_release_sha "$previous_sha"; then
+      resume_previous_application "$previous_sha" \
+        || fail "backup failed and the previous application could not be resumed"
+    fi
+    fail "verified pre-deploy backup failed before Flyway; no schema change was attempted"
+  fi
   compose "$release_sha" up --detach --no-build postgres redis app
   if ! wait_for_healthy_app "$release_sha"; then
     compose "$release_sha" stop app >/dev/null 2>&1 || true
-    return 1
+    fail "release activation failed after the verified pre-deploy backup; restore the database explicitly before starting an older binary"
   fi
   if [[ -n "$previous_sha" && "$previous_sha" != "$release_sha" ]]; then
     write_previous_release "$previous_sha"
@@ -347,7 +393,7 @@ stage_release() {
   printf '%s  %s\n' "$archive_digest" "$archive_path" | sha256sum --check --status \
     || fail "release archive checksum failed"
   require_free_space_kib $((12 * 1024 * 1024)) "release staging"
-  prune_old_releases "$release_sha" "$(read_current_release)"
+  prune_old_releases "$release_sha" "$(read_current_release)" "$(read_previous_release)"
   extract_release "$release_sha" "$archive_digest"
   load_release_images "$release_sha"
   printf 'geuneul release %s is staged.\n' "$release_sha"
@@ -355,12 +401,19 @@ stage_release() {
 
 prune_old_releases() {
   local active_sha="$1"
-  local rollback_sha="$2"
+  local current_sha="$2"
+  local recovery_sha="$3"
   local index=0
   local release_sha=""
   local -a release_shas=()
   local -A keep=(["$active_sha"]=1)
-  is_release_sha "$rollback_sha" && keep["$rollback_sha"]=1
+  for protected_sha in "$current_sha" "$recovery_sha"; do
+    is_release_sha "$protected_sha" || continue
+    [[ -z "${keep[${protected_sha}]:-}" ]] || continue
+    validate_release "$protected_sha"
+    load_release_images "$protected_sha"
+    keep["$protected_sha"]=1
+  done
   mapfile -t release_shas < <(
     find "$releases_directory" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' \
       | sort -rn | awk '{print $2}'
@@ -394,17 +447,15 @@ case "$operation" in
   start-data)
     target_sha="${GEUNEUL_TARGET_SHA:-}"
     is_release_sha "$target_sha" || fail "data service release SHA is invalid"
-    start_data_services "$target_sha" || fail "data services did not become healthy"
+    start_data_services "$target_sha"
     printf 'geuneul data services for release %s are healthy; the app remains stopped.\n' "$target_sha"
     ;;
   deploy)
     stage_release
     target_sha="${GEUNEUL_RELEASE_SHA}"
     previous_sha="$(read_current_release)"
-    if ! activate_release "$target_sha"; then
-      fail "release activation failed after the verified pre-deploy backup; restore the database explicitly before starting an older binary"
-    fi
-    prune_old_releases "$target_sha" "$previous_sha"
+    activate_release "$target_sha"
+    prune_old_releases "$target_sha" "$(read_current_release)" "$(read_previous_release)"
     printf 'geuneul release %s is healthy.\n' "$target_sha"
     ;;
   activate)
@@ -412,7 +463,7 @@ case "$operation" in
     is_release_sha "$target_sha" || fail "activation SHA is invalid"
     [[ -z "$(read_current_release)" ]] \
       || fail "activate is only allowed for the initial release; use a main-branch deploy afterward"
-    activate_release "$target_sha" || fail "release activation failed"
+    activate_release "$target_sha"
     printf 'geuneul release %s is healthy.\n' "$target_sha"
     ;;
   *) fail "usage: remote-release.sh [current|stage|start-data|activate|deploy]" ;;
