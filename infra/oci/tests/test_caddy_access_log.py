@@ -115,7 +115,11 @@ class CaddyAccessLogIntegrationTest(unittest.TestCase):
             try:
                 cls._request(request)
                 return
-            except (urllib.error.URLError, http.client.RemoteDisconnected):
+            except (
+                urllib.error.URLError,
+                http.client.RemoteDisconnected,
+                ConnectionResetError,
+            ):
                 time.sleep(0.1)
         raise AssertionError("Caddy test server did not accept HTTP requests")
 
