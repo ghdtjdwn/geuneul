@@ -7,8 +7,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * 신고 접수 요청. reporterId는 바디로 받지 않고 JWT(AuthPrincipal)에서 취한다(신원 위조 방지,
- * ReviewCreateRequest와 동일 원칙 — docs/SPEC.md 작업 지시).
+ * 신고 접수 요청. reporterId는 바디로 받지 않고 JWT(AuthPrincipal)에서 취해 신원 위조를 막는다.
+ * ReviewCreateRequest와 동일한 docs/SPEC.md 신원 계약을 따른다.
  */
 @Schema(description = "신고 접수 요청 — 로그인 필요")
 public record FlagCreateRequest(

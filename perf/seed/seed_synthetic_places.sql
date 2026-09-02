@@ -1,4 +1,4 @@
--- P4 부하테스트용 합성 대량 좌표 시드 — Flyway 마이그레이션이 아니다(프로덕션에 적재 금지, docs/SPEC.md 지시).
+-- P4 부하테스트용 합성 대량 좌표 시드 — Flyway 마이그레이션이 아니다(프로덕션 적재 금지, docs/SPEC.md 안전 제약).
 -- 로컬 docker-compose PostGIS에서만 psql로 직접 실행한다.
 --
 -- 목적: PostGIS GiST 인덱스(반경 ST_DWithin geography · kNN <-> · bounds &&)가 "실제로" 대용량에서
