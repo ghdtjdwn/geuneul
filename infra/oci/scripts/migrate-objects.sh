@@ -55,7 +55,30 @@ aws_cli() {
   shift 2
   docker run --rm --env-file "$env_path" \
     --env AWS_DEFAULT_REGION="$region" --env AWS_EC2_METADATA_DISABLED=true \
+    --env AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED \
+    --env AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED \
     --volume "${staging_root}:/work" "$aws_cli_image" "$@"
+}
+
+target_aws_cli() {
+  local attempt=1
+  local max_attempts=20
+  local error_file="${staging_root}/inventory/target-request-error.log"
+
+  while ! aws_cli "$target_env" "$target_region" "$@" 2>"$error_file"; do
+    cat "$error_file" >&2
+    if ! grep -Eq 'SignatureDoesNotMatch|RequestTimeout|InternalError|ServiceUnavailable|Connection (reset|timed out)' "$error_file"; then
+      return 1
+    fi
+    if (( attempt >= max_attempts )); then
+      fail "OCI S3 compatibility request failed after ${max_attempts} attempts"
+    fi
+    printf 'OCI S3 compatibility request failed; retrying after credential propagation (%d/%d).\n' \
+      "$attempt" "$max_attempts" >&2
+    attempt=$((attempt + 1))
+    sleep 3
+  done
+  rm -f "$error_file"
 }
 
 aws_cli "$source_env" "$source_region" s3api list-objects-v2 --bucket "$source_bucket" \
@@ -76,7 +99,7 @@ excluded_source_bytes="$(
 [[ "$excluded_source_count" =~ ^[0-9]+$ && "$excluded_source_bytes" =~ ^[0-9]+$ ]] \
   || fail "excluded source inventory is invalid"
 
-aws_cli "$target_env" "$target_region" --endpoint-url "$target_endpoint" s3api list-objects-v2 \
+target_aws_cli --endpoint-url "$target_endpoint" s3api list-objects-v2 \
   --bucket "$target_bucket" --query 'Contents[].{Key:Key,Size:Size}' --output json \
   >"${staging_root}/inventory/target-before.json"
 target_before_count="$(jq 'length // 0' "${staging_root}/inventory/target-before.json")"
@@ -111,12 +134,12 @@ aws_cli "$source_env" "$source_region" s3 sync "s3://${source_bucket}" /work/sou
 python3 "${script_dir}/object-inventory.py" "${staging_root}/source" \
   "${staging_root}/inventory/source-local.json"
 
-aws_cli "$target_env" "$target_region" --endpoint-url "$target_endpoint" s3 sync \
+target_aws_cli --endpoint-url "$target_endpoint" s3 sync \
   /work/source "s3://${target_bucket}" --no-follow-symlinks --only-show-errors
-aws_cli "$target_env" "$target_region" --endpoint-url "$target_endpoint" s3api list-objects-v2 \
+target_aws_cli --endpoint-url "$target_endpoint" s3api list-objects-v2 \
   --bucket "$target_bucket" --query 'Contents[].{Key:Key,Size:Size}' --output json \
   >"${staging_root}/inventory/target-s3.json"
-aws_cli "$target_env" "$target_region" --endpoint-url "$target_endpoint" s3 sync \
+target_aws_cli --endpoint-url "$target_endpoint" s3 sync \
   "s3://${target_bucket}" /work/target-verify --no-follow-symlinks --only-show-errors
 python3 "${script_dir}/object-inventory.py" "${staging_root}/target-verify" \
   "${staging_root}/inventory/target-local.json"

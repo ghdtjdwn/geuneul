@@ -24,6 +24,18 @@ class ObjectMigrationTest(unittest.TestCase):
         self.assertIn("excludedObjectCount", script)
         self.assertIn("excludedBytes", script)
 
+    def test_oci_customer_secret_propagation_has_a_bounded_retry(self) -> None:
+        script = MIGRATE_OBJECTS.read_text(encoding="utf-8")
+
+        self.assertIn("target_aws_cli()", script)
+        self.assertIn("max_attempts=20", script)
+        self.assertIn('sleep 3', script)
+        self.assertIn("AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED", script)
+        self.assertIn("AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED", script)
+        self.assertIn("SignatureDoesNotMatch|RequestTimeout|InternalError|ServiceUnavailable", script)
+        self.assertIn('fail "OCI S3 compatibility request failed after ${max_attempts} attempts"', script)
+        self.assertEqual(script.count('target_aws_cli --endpoint-url "$target_endpoint"'), 4)
+
     def test_inventory_is_sorted_and_hashes_file_contents(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "objects"

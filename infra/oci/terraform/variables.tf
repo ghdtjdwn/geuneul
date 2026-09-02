@@ -42,6 +42,28 @@ variable "iam_name_prefix" {
   }
 }
 
+variable "photo_app_email" {
+  description = "Unique primary email required by identity-domain tenancies for the photo application service user."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+$", var.photo_app_email))
+    error_message = "photo_app_email must be a valid email address."
+  }
+}
+
+variable "backup_writer_email" {
+  description = "Unique primary email required by identity-domain tenancies for the backup writer service user."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+$", var.backup_writer_email))
+    error_message = "backup_writer_email must be a valid email address."
+  }
+}
+
 variable "photos_bucket_name" {
   description = "Private bucket used by presigned photo uploads."
   type        = string

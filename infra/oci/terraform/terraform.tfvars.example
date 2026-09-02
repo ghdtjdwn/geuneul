@@ -2,6 +2,9 @@ region           = "ap-chuncheon-1"
 tenancy_ocid     = "ocid1.tenancy.oc1..replace-with-real-ocid"
 compartment_ocid = "ocid1.compartment.oc1..replace-with-real-ocid"
 
+photo_app_email     = "replace-with-unique-photo-app-email"
+backup_writer_email = "replace-with-unique-backup-writer-email"
+
 photos_bucket_name  = "geuneul-photos"
 backups_bucket_name = "geuneul-backups"
 

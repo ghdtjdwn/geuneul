@@ -52,6 +52,8 @@ resource "oci_objectstorage_object_lifecycle_policy" "photos" {
   namespace = oci_objectstorage_bucket.photos.namespace
   bucket    = oci_objectstorage_bucket.photos.name
 
+  depends_on = [oci_identity_policy.object_storage_runtime]
+
   rules {
     action      = "DELETE"
     is_enabled  = true
@@ -74,6 +76,8 @@ resource "oci_objectstorage_object_lifecycle_policy" "photos" {
 resource "oci_objectstorage_object_lifecycle_policy" "backups" {
   namespace = oci_objectstorage_bucket.backups.namespace
   bucket    = oci_objectstorage_bucket.backups.name
+
+  depends_on = [oci_identity_policy.object_storage_runtime]
 
   rules {
     action      = "DELETE"
@@ -98,6 +102,7 @@ resource "oci_identity_user" "photo_app" {
   compartment_id = var.tenancy_ocid
   name           = "${var.iam_name_prefix}-photo-app"
   description    = "Non-interactive Geuneul application identity restricted to the photos bucket."
+  email          = var.photo_app_email
 }
 
 resource "oci_identity_user_capabilities_management" "photo_app" {
@@ -125,6 +130,7 @@ resource "oci_identity_user" "backup_writer" {
   compartment_id = var.tenancy_ocid
   name           = "${var.iam_name_prefix}-backup-writer"
   description    = "Non-interactive append-oriented writer for Geuneul logical database backups."
+  email          = var.backup_writer_email
 }
 
 resource "oci_identity_user_capabilities_management" "backup_writer" {
@@ -158,5 +164,7 @@ resource "oci_identity_policy" "object_storage_runtime" {
     "Allow group ${oci_identity_group.photo_app.name} to manage objects in compartment id ${var.compartment_ocid} where target.bucket.name='${oci_objectstorage_bucket.photos.name}'",
     "Allow group ${oci_identity_group.backup_writer.name} to read buckets in compartment id ${var.compartment_ocid} where target.bucket.name='${oci_objectstorage_bucket.backups.name}'",
     "Allow group ${oci_identity_group.backup_writer.name} to manage objects in compartment id ${var.compartment_ocid} where all {target.bucket.name='${oci_objectstorage_bucket.backups.name}', request.permission!='OBJECT_DELETE', request.permission!='OBJECT_VERSION_DELETE'}",
+    "Allow service objectstorage-${var.region} to manage object-family in compartment id ${var.compartment_ocid} where all {target.bucket.name='${oci_objectstorage_bucket.photos.name}', any {request.permission='BUCKET_INSPECT', request.permission='BUCKET_READ', request.permission='OBJECT_INSPECT', request.permission='OBJECT_UPDATE_TIER', request.permission='OBJECT_DELETE', request.permission='OBJECT_VERSION_DELETE'}}",
+    "Allow service objectstorage-${var.region} to manage object-family in compartment id ${var.compartment_ocid} where all {target.bucket.name='${oci_objectstorage_bucket.backups.name}', any {request.permission='BUCKET_INSPECT', request.permission='BUCKET_READ', request.permission='OBJECT_INSPECT', request.permission='OBJECT_UPDATE_TIER', request.permission='OBJECT_DELETE', request.permission='OBJECT_VERSION_DELETE'}}",
   ]
 }
