@@ -41,8 +41,8 @@ class HostStorageContractTest(unittest.TestCase):
         ]
         self.assertIn("geuneul_verify_host_storage", common_runtime)
         self.assertNotIn("geuneul_require_host_capacity", common_runtime)
-        self.assertIn('activate_release "$previous_sha" no', remote_release)
-        self.assertIn('activate_release "$target_sha" no', remote_release)
+        self.assertNotIn('activate_release "$previous_sha"', remote_release)
+        self.assertNotIn('activate_release "$target_sha" no', remote_release)
 
 
 if __name__ == "__main__":

@@ -1,13 +1,13 @@
 name: Deploy (OCI ARM64)
 
 # Production is manual while the AWS source data is being recovered. The first
-# run uses "stage" to transfer verified images without starting the application;
-# after DB/object restore and approval, "deploy" activates the same release.
+# run uses "stage" to transfer verified images without starting any service;
+# after DB/object restore and approval, "deploy" activates a verified release.
 on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Stage images only, or stage and activate the release
+        description: Transfer images only, or transfer and activate the release
         required: true
         default: stage
         type: choice
@@ -23,8 +23,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  authorize:
+    name: Authorize main branch dispatch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the main branch ref
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$DISPATCH_REF" != "refs/heads/main" ]]; then
+            echo "::error::Production releases must be dispatched from refs/heads/main."
+            exit 1
+          fi
+
   test:
     name: Production test gate
+    needs: authorize
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
@@ -50,7 +64,8 @@ jobs:
 
   deploy:
     name: ${{ inputs.operation }} OCI production release
-    needs: test
+    needs: [authorize, test]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -135,16 +150,7 @@ jobs:
             -i "$key_file" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "$OPERATION $RELEASE_SHA $RELEASE_DIGEST" <"$RELEASE_ARCHIVE"
-          if [[ "$OPERATION" == "stage" ]]; then
-            ssh -T \
-              -o BatchMode=yes \
-              -o IdentitiesOnly=yes \
-              -o StrictHostKeyChecking=yes \
-              -o "UserKnownHostsFile=$known_hosts" \
-              -i "$key_file" \
-              "$DEPLOY_USER@$DEPLOY_HOST" \
-              "start-data $RELEASE_SHA"
-          else
+          if [[ "$OPERATION" == "deploy" ]]; then
             current="$(ssh -T \
               -o BatchMode=yes \
               -o IdentitiesOnly=yes \

@@ -260,6 +260,40 @@ wait_for_healthy_data_services() {
   done
 }
 
+validate_backup_marker() {
+  local marker="$1"
+  local backup_epoch=""
+  local backup_name=""
+  local backup_size=""
+  local backup_digest=""
+  [[ -f "$marker" && ! -L "$marker" ]] || fail "verified backup marker is missing or unsafe"
+  read -r backup_epoch backup_name backup_size backup_digest <"$marker"
+  [[ "$backup_epoch" =~ ^[0-9]+$ && "$backup_name" == geuneul-*.dump \
+    && "$backup_size" =~ ^[0-9]+$ && "$backup_digest" =~ ^[0-9a-f]{64}$ ]] \
+    || fail "verified backup marker is invalid"
+}
+
+ensure_predeploy_backup() {
+  local release_sha="$1"
+  local backup_status="${deploy_root}/backups/last-success"
+  local release_backup_marker="${shared_directory}/predeploy-backup-${release_sha}"
+  local temporary_marker="${shared_directory}/.predeploy-backup-${release_sha}.$$"
+  if [[ -f "$release_backup_marker" && ! -L "$release_backup_marker" ]]; then
+    validate_backup_marker "$release_backup_marker"
+    return
+  fi
+  [[ ! -e "$release_backup_marker" && ! -L "$release_backup_marker" ]] \
+    || fail "pre-deploy backup marker path is unsafe"
+  "${releases_directory}/${release_sha}/infra/oci/scripts/backup-database.sh" \
+    "$production_environment" "${deploy_root}/backups"
+  validate_backup_marker "$backup_status"
+  read -r backup_epoch backup_name backup_size backup_digest <"$backup_status"
+  printf '%s\t%s\t%s\t%s\n' "$backup_epoch" "$backup_name" "$backup_size" "$backup_digest" \
+    >"$temporary_marker"
+  chmod 0600 "$temporary_marker"
+  mv "$temporary_marker" "$release_backup_marker"
+}
+
 start_data_services() {
   local release_sha="$1"
   require_free_space_kib $((10 * 1024 * 1024)) "starting data services"
@@ -285,8 +319,12 @@ activate_release() {
   GEUNEUL_RELEASE_SHA="$release_sha" \
     "${releases_directory}/${release_sha}/infra/oci/scripts/validate-runtime.sh" "$production_environment"
   previous_sha="$(read_current_release)"
+  ensure_predeploy_backup "$release_sha"
   compose "$release_sha" up --detach --no-build postgres redis app
-  wait_for_healthy_app "$release_sha" || return 1
+  if ! wait_for_healthy_app "$release_sha"; then
+    compose "$release_sha" stop app >/dev/null 2>&1 || true
+    return 1
+  fi
   if [[ -n "$previous_sha" && "$previous_sha" != "$release_sha" ]]; then
     write_previous_release "$previous_sha"
   fi
@@ -364,10 +402,7 @@ case "$operation" in
     target_sha="${GEUNEUL_RELEASE_SHA}"
     previous_sha="$(read_current_release)"
     if ! activate_release "$target_sha"; then
-      if is_release_sha "$previous_sha" && activate_release "$previous_sha" no; then
-        printf 'Activation failed; automatic rollback restored %s.\n' "$previous_sha" >&2
-      fi
-      fail "release activation failed"
+      fail "release activation failed after the verified pre-deploy backup; restore the database explicitly before starting an older binary"
     fi
     prune_old_releases "$target_sha" "$previous_sha"
     printf 'geuneul release %s is healthy.\n' "$target_sha"
@@ -375,16 +410,10 @@ case "$operation" in
   activate)
     target_sha="${GEUNEUL_TARGET_SHA:-}"
     is_release_sha "$target_sha" || fail "activation SHA is invalid"
+    [[ -z "$(read_current_release)" ]] \
+      || fail "activate is only allowed for the initial release; use a main-branch deploy afterward"
     activate_release "$target_sha" || fail "release activation failed"
     printf 'geuneul release %s is healthy.\n' "$target_sha"
     ;;
-  rollback)
-    target_sha="${GEUNEUL_TARGET_SHA:-}"
-    is_release_sha "$target_sha" || fail "rollback SHA is invalid"
-    current_sha="$(read_current_release)"
-    activate_release "$target_sha" no || fail "rollback release did not become healthy"
-    if is_release_sha "$current_sha"; then write_previous_release "$current_sha"; fi
-    printf 'geuneul rollback restored %s.\n' "$target_sha"
-    ;;
-  *) fail "usage: remote-release.sh [current|stage|start-data|activate|deploy|rollback]" ;;
+  *) fail "usage: remote-release.sh [current|stage|start-data|activate|deploy]" ;;
 esac

@@ -29,7 +29,7 @@ if [[ "$original_command" == "current" ]]; then
   exec bash "$manager" current
 fi
 
-if [[ "$original_command" =~ ^(start-data|activate|rollback)\ ([0-9a-f]{40})$ ]]; then
+if [[ "$original_command" =~ ^(start-data|activate)\ ([0-9a-f]{40})$ ]]; then
   export GEUNEUL_TARGET_SHA="${BASH_REMATCH[2]}"
   exec bash "$manager" "${BASH_REMATCH[1]}"
 fi
@@ -58,4 +58,4 @@ if [[ "$original_command" =~ ^(stage|deploy)\ ([0-9a-f]{40})\ ([0-9a-f]{64})$ ]]
   exit 0
 fi
 
-fail "only current, stage/deploy <sha> <digest>, start-data/activate/rollback <sha> is allowed"
+fail "only current, stage/deploy <sha> <digest>, or start-data/activate <sha> is allowed"

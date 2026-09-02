@@ -4,6 +4,12 @@
 {$GEUNEUL_SITE_ADDRESS} {
 	encode zstd gzip
 
+	# SigV4 query parameters contain temporary credentials. Exclude the complete
+	# upload gateway path from access logs rather than trying to redact selected
+	# parameters as the signing format evolves.
+	@presigned_upload_path path /object-storage/*
+	log_skip @presigned_upload_path
+
 	@upload_preflight {
 		method OPTIONS
 		path /object-storage/*

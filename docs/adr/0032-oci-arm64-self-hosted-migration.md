@@ -63,11 +63,11 @@ AWS 쓰기를 먼저 멈춘 뒤 PostgreSQL 16 client로 `pg_dump --format=custom
 
 ### 6. 빌드는 GitHub에서, 운영 실행은 제한된 rootless 계정에서 한다
 
-GitHub Actions는 QEMU/buildx로 backend와 PostGIS의 ARM64 image archive를 만들고, image architecture·backend revision label·각 archive SHA-256을 확인한다. release archive는 경로 이동·심볼릭 링크·파일/전체 크기를 제한하는 extractor를 통과한 뒤에만 서버에 저장한다. 배포 SSH key는 shell을 열 수 없고 `stage`, `deploy`, `activate`, `rollback`, `current`만 허용하는 root-owned forced-command gateway에 묶는다.
+GitHub Actions는 QEMU/buildx로 backend와 PostGIS의 ARM64 image archive를 만들고, image architecture·backend revision label·각 archive SHA-256을 확인한다. release archive는 경로 이동·심볼릭 링크·파일/전체 크기를 제한하는 extractor를 통과한 뒤에만 서버에 저장한다. production job은 `main` ref gate를 통과해야 environment와 secret에 접근한다. 배포 SSH key는 shell을 열 수 없고 `stage`, `deploy`, 최초 `activate`, `start-data`, `current`만 허용하는 root-owned forced-command gateway에 묶는다.
 
-첫 이전은 `stage`로 image를 적재하고 `start-data`로 PostgreSQL·Redis만 `--no-build` 기동해 애플리케이션과 데이터 복원을 분리한다. DB·객체 무결성 검증 뒤 같은 Git SHA를 `activate`한다. 이후 일반 배포는 `deploy`가 health 확인과 이전 release 자동 복귀까지 수행한다. 전용 rootless 사용자는 전체 0.75 CPU·3GiB·swap 0으로 제한하고, 기존 block volume root에는 해당 사용자만 통과할 수 있는 execute-only ACL을 둔다.
+첫 이전은 `stage`로 image와 release file만 적재한다. 별도 승인된 `start-data`가 PostgreSQL·Redis만 `--no-build` 기동해 애플리케이션과 데이터 복원을 분리한다. DB·객체 무결성 검증 뒤 같은 Git SHA를 최초 1회 `activate`한다. 이후 일반 배포는 `main`의 `deploy`만 사용하며 application 시작 직전 logical backup·checksum·table counts·off-host HEAD를 검증하고 release별 불변 marker에 고정한다. 같은 release를 재시도해도 Flyway 이전 backup 경계는 바뀌지 않는다. Flyway가 schema를 변경할 수 있으므로 activation 실패 시 app을 정지하고 이전 binary를 자동 시작하지 않는다. 이전 release는 배포 직전 backup을 빈 DB에 명시적으로 복원·검증하고 schema 호환성을 확인한 뒤에만 운영자가 재기동한다.
 
-K3s·MarketValley·Geuneul이 같은 200GB boot filesystem을 공유하므로 bootstrap, stage, data start, activate와 상시 health는 모두 boot free 40GiB 이상·inode 사용률 90% 이하를 fail-closed 강제한다. 저장소 구조 검증과 capacity 검증은 분리해 디스크 압박 중에도 기존 release rollback은 가능하게 한다. release archive와 image는 active·rollback·최근 5개만 유지한다. rootless systemd timer가 매일 logical backup을 실행하며 자체 flock, DB 크기 기반 여유 공간 검사, 별도 non-delete credential, off-host HEAD size, 성공 marker를 사용한다. 별도 15분 health timer가 app image/health, host disk·inode, timer와 36시간 backup freshness를 journal failure로 노출한다.
+K3s·MarketValley·Geuneul이 같은 200GB boot filesystem을 공유하므로 bootstrap, stage, data start, activate와 상시 health는 모두 boot free 40GiB 이상·inode 사용률 90% 이하를 fail-closed 강제한다. release archive와 image는 active·직전·최근 5개만 유지한다. rootless systemd timer가 매일 logical backup을 실행하며 자체 flock, DB 크기 기반 여유 공간 검사, 별도 non-delete credential, off-host HEAD size, 성공 marker를 사용한다. 별도 15분 health timer가 app image/health, host disk·inode, timer와 36시간 backup freshness를 journal failure로 노출한다.
 
 ## 검토한 대안
 
