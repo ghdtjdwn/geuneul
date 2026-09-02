@@ -188,7 +188,7 @@ load_release_images() {
   docker load --input "${release_directory}/postgis-image.tar" >/dev/null
   [[ "$(docker image inspect --format '{{.Architecture}}' "geuneul-backend:${release_sha}")" == "arm64" ]] \
     || fail "backend image is not arm64"
-  [[ "$(docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' "geuneul-backend:${release_sha}")" == "$release_sha" ]] \
+  [[ "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "geuneul-backend:${release_sha}")" == "$release_sha" ]] \
     || fail "backend image revision label does not match"
   [[ "$(docker image inspect --format '{{.Architecture}}' "$postgis_image")" == "arm64" ]] \
     || fail "PostGIS image is not arm64"

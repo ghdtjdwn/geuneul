@@ -40,6 +40,22 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertNotIn('"start-data $RELEASE_SHA"', workflow)
         self.assertIn('if [[ "$OPERATION" == "deploy" ]]', workflow)
 
+    def test_server_image_revision_template_matches_the_verified_workflow(self) -> None:
+        workflow = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
+        remote_release = (SERVER_ROOT / "remote-release.sh").read_text(encoding="utf-8")
+        template = '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+
+        self.assertIn(template, workflow)
+        self.assertIn(template, remote_release)
+        self.assertNotIn(r'{{index .Config.Labels \"org.opencontainers.image.revision\"}}', remote_release)
+
+    def test_off_host_backup_uses_oci_compatible_checksum_settings(self) -> None:
+        for name in ("backup-database.sh", "verify-backup-object.sh"):
+            with self.subTest(name=name):
+                script = (REPOSITORY_ROOT / "infra/oci/scripts" / name).read_text(encoding="utf-8")
+                self.assertIn("AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED", script)
+                self.assertIn("AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED", script)
+
     def test_activation_has_a_verified_backup_and_explicit_restore_boundary(self) -> None:
         remote_release = (SERVER_ROOT / "remote-release.sh").read_text(encoding="utf-8")
         freeze = remote_release.index('freeze_application_writes "$previous_sha"')

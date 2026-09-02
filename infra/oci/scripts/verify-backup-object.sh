@@ -51,6 +51,8 @@ chmod 0600 "$aws_env"
 if ! remote_size="$(
   docker run --rm --env-file "$aws_env" \
     --env AWS_DEFAULT_REGION="$region" --env AWS_EC2_METADATA_DISABLED=true \
+    --env AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED \
+    --env AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED \
     "$aws_cli_image" --endpoint-url "$endpoint" s3api head-object \
     --bucket "$bucket" --key "$remote_key" --query ContentLength --output text
 )"; then
@@ -62,6 +64,8 @@ fi
 if ! remote_digest="$(
   docker run --rm --env-file "$aws_env" \
     --env AWS_DEFAULT_REGION="$region" --env AWS_EC2_METADATA_DISABLED=true \
+    --env AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED \
+    --env AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED \
     "$aws_cli_image" --endpoint-url "$endpoint" s3 cp \
     "s3://${bucket}/${remote_key}" - --only-show-errors \
     | sha256sum | awk '{ print $1 }'
