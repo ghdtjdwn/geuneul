@@ -1,6 +1,6 @@
 # ADR-0015. ALB 무료 HTTPS — CloudFront 기본 도메인(*.cloudfront.net), 커스텀 도메인·ACM 없이
 
-- 상태: 승인 (2026-07-10) · apply 완료·라이브
+- 상태: AWS 운영 이력. 2026-07-10 apply·라이브 검증 뒤 2026-09-03 OCI Caddy edge로 대체하고 CloudFront를 삭제했다.
 - 관련: `infra/terraform/cloudfront.tf`(신규)·`outputs.tf`(https_url)·`alb.tf`(오리진), CloudFront 배포 `https://d2pedv974beobb.cloudfront.net`
 - 선행: [ADR-0004](0004-frontend-same-origin-proxy.md)(프론트는 동일 오리진 BFF로 ALB(http)에 서버사이드 접근 — 이 배포와 무관), SPEC.md §7(Infra)·§10 P4(공유 링크 신뢰도)
 

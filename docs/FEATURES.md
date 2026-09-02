@@ -107,7 +107,7 @@ survival_score = 0.25·distance + 0.20·comfort + 0.20·freshness − 0.15·risk
 - 자리 여유, 혼잡, 시원함, 위험, 미끄러움 등 11개 상태 유형을 선택할 수 있다.
 - 제보 유형마다 TTL이 있어 시간이 지나면 자동으로 만료된다. 만료된 제보는 현재 상태 점수에서 제외한다.
 - 위치를 함께 보내고 장소 100m 안에 있으면 방문 인증(`verified`)으로 기록한다.
-- 사진은 서버를 거치지 않고 S3 presigned URL로 직접 업로드한다. 서버는 업로드 권한과 메타데이터만 발급한다.
+- 사진은 애플리케이션 서버를 거치지 않고 OCI Object Storage presigned URL로 직접 업로드한다. 서버는 업로드 권한과 메타데이터만 발급한다.
 - 제보 작성은 분당·시간당 제한을 두고, 원래 클라이언트 IP를 BFF에서 보존해 우회 가능성을 낮춘다.
 
 관련 API: `POST /reports`, `GET /places/{id}/reports`, `GET /places/{id}/popular-times`, `POST /photos/presign`
@@ -139,7 +139,7 @@ survival_score = 0.25·distance + 0.20·comfort + 0.20·freshness − 0.15·risk
 한 장소 주변에 제보가 짧은 시간에 몰리면 지도 화면에 중립적인 급증 배너를 띄운다.
 
 1. 제보 저장 후 PostgreSQL `LISTEN/NOTIFY`로 이벤트를 발행한다.
-2. 모든 ECS 인스턴스가 이벤트를 받아 구독 중인 브라우저에 SSE로 전달한다.
+2. 실행 중인 app instance가 이벤트를 받아 구독 중인 브라우저에 SSE로 전달한다.
 3. SSE가 끊기거나 지원되지 않는 환경은 45초 주기의 스냅샷 폴링으로 보완한다.
 
 관련 API: `GET /alerts/surge`, `GET /alerts/stream`
@@ -195,9 +195,9 @@ survival_score = 0.25·distance + 0.20·comfort + 0.20·freshness − 0.15·risk
 
 | 원본 | 대상 | 갱신 방식 |
 |---|---|---|
-| data.go.kr 전국도서관표준데이터 API | 도서관 | EventBridge Scheduler가 매월 2일 KST 04:00에 ECS one-off task 실행 |
-| GitHub Release CSV | 무더위쉼터, 공중화장실 | 새 스냅샷 게시 후 ECS one-off task를 수동 실행 |
-| 상권정보 API | 카페, 스터디카페 | 수집 범위와 API 이용 조건을 확인한 뒤 수동 실행 |
+| data.go.kr 전국도서관표준데이터 API | 도서관 | 기존 데이터는 보존. AWS 월별 scheduler 제거 뒤 OCI 대체 timer가 아직 없어 자동 갱신은 일시 중단 |
+| GitHub Release CSV | 무더위쉼터, 공중화장실 | 새 snapshot의 digest·완전성을 검증한 뒤 OCI one-off ingestion을 통제 실행 |
+| 상권정보 API | 카페, 스터디카페 | 수집 범위와 API 이용 조건을 확인한 뒤 OCI one-off ingestion을 통제 실행 |
 | 기상청 API | 날씨 | 요청 시 조회, Redis TTL 30분 |
 | 서비스 사용자 | 현장 제보·후기 | API 저장 직후 반영 |
 
@@ -212,15 +212,15 @@ survival_score = 0.25·distance + 0.20·comfort + 0.20·freshness − 0.15·risk
 ```text
 Browser / PWA
   → Vercel Next.js BFF (/api/*, same origin)
-  → CloudFront → ALB → ECS Fargate Spring Boot API
-  → RDS PostgreSQL + PostGIS / ElastiCache Redis / S3
+  → OCI shared Caddy HTTPS → rootless Spring Boot API
+  → PostgreSQL + PostGIS / Redis / OCI Object Storage
 ```
 
-- 브라우저는 백엔드 ALB를 직접 호출하지 않고, 같은 도메인의 Next.js Route Handler만 호출한다. HTTPS와 CORS 문제를 한곳에서 처리하고 외부 API 키를 브라우저에 노출하지 않는다.
-- 공간 검색과 집계는 RDS PostgreSQL 16 + PostGIS의 GiST 인덱스와 SQL 뷰에서 처리한다.
-- Redis는 날씨와 조회 캐시를, S3는 제보·후기 사진을 맡는다.
-- CloudFront는 공개 HTTPS 진입점이고 ALB는 오리진으로만 사용한다.
-- Terraform으로 VPC, ALB, ECS, RDS, Redis, S3, EventBridge, IAM을 선언한다.
+- 브라우저는 OCI backend를 직접 호출하지 않고, 같은 도메인의 Next.js Route Handler만 호출한다. TLS와 인증 계약을 한곳에서 처리하고 OCI origin과 외부 API 키를 브라우저에 노출하지 않는다.
+- 공간 검색과 집계는 rootless PostgreSQL 16 + PostGIS의 GiST 인덱스와 SQL 뷰에서 처리한다.
+- Redis는 날씨와 조회 cache·분산 rate limit을, private OCI Object Storage는 제보·후기 사진과 DB backup을 맡는다.
+- 기존 Caddy가 공개 HTTPS를 종단하고 Geuneul의 private host bind로 proxy한다. PostgreSQL과 Redis에는 public port가 없다.
+- Terraform은 Object Storage bucket·versioning·lifecycle·IAM을 선언하고, Compose와 systemd가 app/data/health/backup을 운영한다.
 
 ### 사용 기술
 
@@ -228,10 +228,10 @@ Browser / PWA
 |---|---|
 | Backend | Spring Boot 4, Java 21, Spring MVC, Spring Security, JPA/Hibernate Spatial, Flyway, Micrometer, OpenTelemetry |
 | Database | PostgreSQL 16, PostGIS, GiST 인덱스, SQL 뷰, PostgreSQL LISTEN/NOTIFY |
-| Cache and storage | ElastiCache Redis, S3 presigned URL |
+| Cache and storage | Redis 7.4, OCI Object Storage S3 compatibility presigned URL |
 | Frontend | Next.js 16 App Router, TypeScript, Tailwind CSS v4, TanStack Query, Kakao Maps, Serwist |
-| Infrastructure | AWS ECS Fargate, RDS, ALB, CloudFront, ECR, EventBridge Scheduler, Terraform, Vercel |
-| Delivery | GitHub Actions, OIDC 기반 AWS 역할 위임, Docker 이미지 배포 |
+| Infrastructure | Vercel, OCI Ampere A1 ARM64 rootless Compose, Caddy, Object Storage, Terraform |
+| Delivery | GitHub Actions ARM64 archive, restricted forced-command SSH gateway, release checksum·revision 검증 |
 | Testing | JUnit, Testcontainers 실제 PostGIS, JaCoCo line coverage 70% 게이트, k6, gitleaks |
 
 ## 11. API 찾아보기
@@ -240,7 +240,8 @@ Browser / PWA
 `SPRINGDOC_ENABLED=true`로 실행할 때만 요청·응답 스키마 확인에 사용한다.
 
 - 로컬 Swagger: `http://localhost:8080/swagger-ui.html` (`SPRINGDOC_ENABLED=true` 필요)
-- 라이브 헬스 체크: [actuator/health](https://d2pedv974beobb.cloudfront.net/actuator/health)
+- 라이브 사용자 경로: [Vercel production](https://geuneul.vercel.app)
+- OCI host·container·storage 상세: [OCI-RUNTIME.md](./OCI-RUNTIME.md)
 - 세부 아키텍처와 ETL: [architecture.md](./architecture.md)
 - 기술 선택의 근거: [ADR 색인](./adr/README.md)
 

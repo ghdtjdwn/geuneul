@@ -204,7 +204,7 @@ POST /notifications/rules                             # (심화) 관심 알림 �
 | **W0 · 세팅** | 레포·기술 결정·인프라 연결 | Docker Compose(PostGIS+Redis), Flyway 스키마, Kakao Maps SDK, CI 스켈레톤 |
 | **P1 · 지리 코어** | 지도 엔진 + 공공데이터 | place/report/user 엔티티, **공공데이터 idempotent ingestion + 지오코딩**, 반경/kNN/bounds API, Swagger, Testcontainers |
 | **P2 · UGC + 인증** | 로그인·제보·후기 | 카카오/구글 OAuth+JWT, 제보(휘발)+후기(영구) 2단, 사진 presign, 신뢰도, 신고/검수 큐 |
-| **P3 · 스코어·추천·AI** | survival_score + 요약 | 시공간 랭킹(SQL), 추천 시나리오, 날씨 API+Redis TTL 캐시, AI 한줄 요약, **공공데이터 주기 동기화**(EventBridge→ECS RunTask, 멱등 upsert 재실행 + 스냅샷 이탈 행 soft-delete + 실행 원장/retry 계보) |
+| **P3 · 스코어·추천·AI** | survival_score + 요약 | 시공간 랭킹(SQL), 추천 시나리오, 날씨 API+Redis TTL 캐시, AI 한줄 요약, 멱등 공공데이터 동기화·soft-delete·실행 원장/retry 계보. AWS 자동 scheduler는 폐기됐고 OCI 대체 timer는 후속 운영 항목 |
 | **P4 · 심화** | 성능·실시간·관측 | **seed 고정 k6 부하테스트 + JSON summary + EXPLAIN 인덱스 튜닝**, 실시간 이벤트(제보 급증 알림), 캐시 전략, 관측성(OTel/Grafana), **ADR 문서** |
 | **P5 · 실사용** | 실서비스 | 동작구 UGC 필드테스트·피드백, PWA 무료 설치 배포(/install) |
 

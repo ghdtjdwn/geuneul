@@ -10,7 +10,7 @@
   <a href="https://geuneul.vercel.app/geuneul.apk"><img src="https://img.shields.io/badge/Android_APK-Download-3DDC84?logo=android&logoColor=white" alt="Download Android APK" /></a>
 </p>
 
-[![API](https://img.shields.io/badge/API-live_health-17957e)](https://d2pedv974beobb.cloudfront.net/actuator/health)
+[![Production](https://img.shields.io/badge/production-Vercel_%2B_OCI-17957e)](https://geuneul.vercel.app)
 
 [![Public Data](https://img.shields.io/badge/Public_data-150k%2B_POI-2f9e44)](#data-etl)
 [![Radius p95](https://img.shields.io/badge/Radius_p95-1.35s_local_300k-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
@@ -53,12 +53,12 @@ On mobile, the map and bottom sheet support nearby discovery, while scenario rec
 - Spatial queries stay in the database. Radius search uses `ST_DWithin`, nearest-neighbor search uses kNN `<->`, and viewport search uses GiST indexes. Low-volume production k6 tuning reduced radius-search p95 from 2.68s to about 1.4s ([ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)). The current code was reverified at 1.35s p95 with no failed requests against a fingerprinted local 300,000-place snapshot; the environments differ, so no direct improvement ratio is claimed ([ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - Idempotent ETL and geocoding use the `source + source_external_id` natural key, so a batch can be run again without duplicates. The service stores 60,297 cooling shelters, 52,334 public toilets, 3,551 libraries, and commercial café/study-space data. Missing WGS84 coordinates are completed with Kakao geocoding and cached to avoid repeated requests. The V20 run ledger tracks retry lineage and freshness without source payloads, while partial API responses and remote CSV digest mismatches fail before database mutation ([ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - Real-time, geo-temporal UGC scoring combines expiring reports and durable reviews with trust weighting in `survival_score`. Report surges flow from PostgreSQL `LISTEN/NOTIFY` through multi-instance fan-out to SSE. Saved-place notifications use `INSERT … RETURNING` to send exactly once ([ADR-0016](./docs/adr/0016-realtime-report-surge-listen-notify-sse.md), [ADR-0026](./docs/adr/0026-bookmark-status-change-notification.md)).
-- Server-validated security boundaries use conditional S3 writes and one-time claims before UGC can reference a photo. Bounded cleanup handles expired unused objects and photos detached from reviews only after rechecking current references. Login and logout serialize on the same user row so database token-version revocation cannot be overwritten, while Redis shares rate limits across ECS instances ([ADR-0031](./docs/adr/0031-security-boundaries-session-upload-rate-limit.md)).
+- Server-validated security boundaries use conditional Object Storage writes and one-time claims before UGC can reference a photo. Bounded cleanup handles expired unused objects and photos detached from reviews only after rechecking current references. Login and logout serialize on the same user row so database token-version revocation cannot be overwritten, while Redis shares rate limits across application instances ([ADR-0031](./docs/adr/0031-security-boundaries-session-upload-rate-limit.md)).
 
 Reviews and photo claims commit or roll back in one transaction. Claimless photos saved before V21 can be removed from existing reviews but remain outside automatic cleanup. PostgreSQL locks, cache generations, and database time provide the consistency boundaries for concurrent first OAuth login, late stale readers, and cleanup clock skew.
 Report security issues through [GitHub private vulnerability reporting](./.github/SECURITY.md), not a public issue.
 
-> Stack: Spring Boot 4 · Java 21 · PostgreSQL + PostGIS · Redis · AWS ECS Fargate (source) · OCI Ampere A1 (target) · Terraform · Next.js PWA
+> Stack: Spring Boot 4 · Java 21 · PostgreSQL + PostGIS · Redis · OCI Ampere A1 · OCI Object Storage · Terraform · Next.js PWA
 
 ## Using the service
 
@@ -72,7 +72,7 @@ Report security issues through [GitHub private vulnerability reporting](./.githu
 
 Browser application APIs use only the same-origin `/api/*` BFF. Photo bytes are the sole exception: a short-lived signed PUT goes through a fixed Object Storage gateway, while spatial search and geo-temporal aggregation remain in GiST-backed SQL ([ADR-0004](./docs/adr/0004-frontend-same-origin-proxy.md), [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)).
 
-For runtime, ETL, CI/CD diagrams, and more screenshots, see [docs/architecture.md](./docs/architecture.md). The existing AWS deployment is documented in [DEPLOY.md](./DEPLOY.md); the OCI migration is in [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md).
+For runtime, ETL, CI/CD diagrams, and more screenshots, see [docs/architecture.md](./docs/architecture.md). Current deployment is documented in [DEPLOY.md](./DEPLOY.md), the detailed host inventory in [docs/OCI-RUNTIME.md](./docs/OCI-RUNTIME.md), and migration evidence in [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md).
 
 ## `survival_score`
 
@@ -94,10 +94,10 @@ Public standard datasets are loaded idempotently: repeating the same source perf
 
 | Data | Refresh policy |
 |---|---|
-| Libraries | Automatic. EventBridge runs a full API ingestion and soft-delete sync on the 2nd of each month at 04:00 KST. |
+| Libraries | Preserved in production. The retired AWS monthly scheduler does not yet have an OCI replacement, so automatic refresh is paused. |
 | Weather | Automatic on demand. Data is refreshed after the 30-minute Redis TTL expires. |
 | User reports | Immediate on submission; surges are delivered by SSE. |
-| Cooling shelters and public toilets | Manual. Publish a new CSV snapshot, then run the ECS ingestion task. |
+| Cooling shelters and public toilets | Manual. Publish and verify a new CSV snapshot before a controlled OCI one-off ingestion. |
 | Cafés and study cafés | Manual after confirming source availability and collection scope. |
 
 ## Quick start
@@ -163,7 +163,8 @@ GET /alerts/stream
 - Complete feature, implementation, and stack guide: [docs/FEATURES.md](./docs/FEATURES.md) (Korean)
 - Architecture and screenshots: [docs/architecture.md](./docs/architecture.md)
 - Technical decision records: [docs/adr/](./docs/adr) ([index](./docs/adr/README.md), 0001–0032)
-- AWS deployment: [DEPLOY.md](./DEPLOY.md)
+- OCI deployment and recovery: [DEPLOY.md](./DEPLOY.md)
+- OCI host, services, storage, and operating limits: [docs/OCI-RUNTIME.md](./docs/OCI-RUNTIME.md)
 - AWS-to-OCI source/target specifications and data-preserving migration record: [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md) · [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)
 - Design and API reference: [docs/design-brief.md](./docs/design-brief.md)
 
@@ -174,7 +175,7 @@ GET /alerts/stream
 - Weather-aware scoring, scenario recommendations, and provider-neutral AI summaries with graceful degradation.
 - Reports, reviews, photos, social login, trust weighting, moderation, bookmarks, following, notifications, SSE, and Web Push.
 - Shade and restroom waypoint routes, road polylines, popular-times heatmaps, and responsive desktop/mobile map experiences.
-- PWA installation, Android TWA/APK distribution, iOS Add to Home Screen, CI checks, OIDC deployment, infrastructure as code, autoscaling, and observability.
+- PWA installation, Android TWA/APK distribution, iOS Add to Home Screen, CI checks, verified ARM64 release deployment, infrastructure as code, bounded host resources, and observability.
 
 ## License
 

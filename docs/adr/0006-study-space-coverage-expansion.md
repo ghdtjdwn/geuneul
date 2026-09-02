@@ -1,6 +1,6 @@
 # ADR-0006. 공부 가능 공간(공공 + 카페) 데이터 커버리지 확장 — "여름 실내 오래 버티기" survival 레이어
 
-- 상태: **Accepted(구현·운영 반영)** — 카테고리(CAFE/STUDY_CAFE)·스키마(is_commercial/deleted_at)·파서·인제스천 코드 완료(2026-07-09). **상권정보(STUDY_CAFE/CAFE) 오픈API 계약 검증 완료(2026-07-10)** — 활용신청 승인 확인(resultCode 00) 후 실호출로 응답 계약·업종코드 확정(아래 "구현 정정(2026-07-10)"·TS-026). 프로덕션 적재 결과는 루트 README의 데이터 커버리지 수치를 기준으로 한다.
+- 상태: **Accepted(구현·운영 반영)** — 카테고리(CAFE/STUDY_CAFE)·스키마(is_commercial/deleted_at)·파서·인제스천 코드 완료(2026-07-09). **상권정보(STUDY_CAFE/CAFE) 오픈API 계약 검증 완료(2026-07-10)** — 활용신청 승인 확인(resultCode 00) 후 실호출로 응답 계약·업종코드 확정(아래 "구현 정정(2026-07-10)"·TS-026). 프로덕션 적재 결과는 루트 README의 데이터 커버리지 수치를 기준으로 한다. 2026-09-03 OCI 이전 뒤 데이터와 ingestion code는 유지하지만 AWS EventBridge/ECS 자동 실행은 중단됐고 OCI 대체 timer는 아직 없다.
 - 관련: `PlaceCategory`, `place_features`, `SourceSpec`/`IngestionService`(idempotent ETL), `domain.ingest.openapi`(도서관)·`domain.ingest.storeapi`(상권정보) 신설, Flyway V5, ADR-0002(멱등)·ADR-0003(지오코딩), SPEC.md §3(커버리지 원칙)·§9(간판 vs 살)
 - 근거 조사: 다중 에이전트 리서치(공공 공부공간 데이터셋·노들서가류·카페 데이터·모델링) — wf_e524daf8. 구현 단계에서 도서관 오픈API 실호출로 원안의 핵심 가정 하나를 정정함(아래).
 
@@ -69,7 +69,7 @@
 ## 결과(Consequences)
 
 - 현재 운영 데이터 커버리지는 루트 README의 수치를 기준으로 한다. 15만+ 규모에서 PostGIS 반경·kNN 성능과 k6 부하테스트를 검증한다.
-- 대량 적재에는 공공데이터포털 오픈API serviceKey 또는 다운로드한 CSV가 필요하다. 도서관 source는 serviceKey를 ECS 시크릿으로 배선해 EventBridge→ECS RunTask 주기 동기화까지 운영 중이다.
+- 대량 적재에는 공공데이터포털 오픈API serviceKey 또는 다운로드한 CSV가 필요하다. 도서관 source는 AWS 운영 당시 serviceKey를 ECS secret으로 배선해 EventBridge→ECS RunTask 주기 동기화를 운영했다. OCI 이전 뒤 자동 실행은 중단 상태다.
 - 상권정보 업종 소분류 코드는 실호출로 카페 `I21201`, 독서실·스터디카페 `R10202`를 확정했다. CSV 헤더·문자셋은 새 스냅샷을 받을 때 적재 명령에서 명시한다.
 
 ## 착수 순서(Recommended Order) — 진행 상황(2026-07-09)
@@ -77,11 +77,11 @@
 0. **골격**: `PlaceCategory` += CAFE/STUDY_CAFE. — ✅ **완료**(프론트 필터·마커·목록까지 동기화).
 1. 업종코드 매핑표로 커피점·독서실/스터디카페 소분류 코드 실측 확정. — ✅ **완료(2026-07-10)**: 승인 후 실호출로 **카페 `I21201`, 독서실/스터디카페 `R10202`** 확정. `StoreCategoryMapper`를 코드맵 authority로 승격(`targetCodes()`/`classifyByCode`), 분류명 매칭은 방어적 폴백으로 강등. 서버측 `indsSclsCd` 필터로 승격(TS-026).
 2. 스키마: `places` += `is_commercial`·`deleted_at`(V5). `IngestionService`/`PlaceBulkUpsertRepository` += set-based feature 백필 + 스냅샷 diff soft-delete(opt-in). — ✅ **완료**.
-3. 전국도서관표준데이터(LIBRARY) 적재 코드 — ✅ **완료·운영 반영**(CSV가 아니라 JSON 오픈API로 경로 정정, 위 "구현 정정" 참고). EventBridge Scheduler가 매월 전체 적재와 soft-delete 동기화를 실행한다.
+3. 전국도서관표준데이터(LIBRARY) 적재 코드 — ✅ **완료·운영 반영**(CSV가 아니라 JSON 오픈API로 경로 정정, 위 "구현 정정" 참고). AWS 운영 당시 EventBridge Scheduler가 매월 전체 적재와 soft-delete 동기화를 실행했다.
 4. 상권정보 STUDY_CAFE → CAFE 적재 코드 — ✅ **완료·계약 검증 완료**. 승인 후 실호출로 응답 구조와 업종 코드를 확정했고, 갱신은 수집 범위를 검토한 뒤 수동 ECS task로 실행한다.
 5. 공공시설개방(CIVIC) 화이트리스트 필터 적재. — ❌ **미착수**(이번 범위 밖, 후속 확장).
 6. 명소 시드(노들서가 등) 개별 등록 + 지오코딩. — ❌ **미착수**(이번 범위 밖, 후속 확장).
-7. P3 무인화(serviceKey 오픈API 주기 동기화 + 여러 반경 호출을 합친 전국 soft-delete diff). — ✅ **library 소스 운영 활성**([ADR-0011](./0011-scheduled-public-data-sync.md), EventBridge Scheduler→ECS RunTask + `IngestBatchLock` 동시 실행 방지, 기본 ENABLED). 상권정보(STUDY_CAFE/CAFE)는 반경 단위 수집 특성상 수집 범위를 검토한 뒤 수동으로 갱신한다.
+7. P3 무인화(serviceKey 오픈API 주기 동기화 + 여러 반경 호출을 합친 전국 soft-delete diff). — ✅ **AWS 운영에서 활성·검증 완료**([ADR-0011](./0011-scheduled-public-data-sync.md), EventBridge Scheduler→ECS RunTask + `IngestBatchLock` 동시 실행 방지). OCI 이전 뒤 scheduler는 폐기됐고 대체 timer가 필요하다. 상권정보(STUDY_CAFE/CAFE)는 반경 단위 수집 특성상 수집 범위를 검토한 뒤 수동으로 갱신한다.
 
 ## 근거(References)
 - 리서치: 전국도서관표준데이터(15013109)·전국공공시설개방정보표준데이터(15013117)·소상공인 상가(상권)정보(15083033/15012005)·노들섬 노들서가(nodeul.org)·서울열린데이터(OA-15480/OA-21062)

@@ -1,6 +1,6 @@
 # ADR-0013. ECS Service Auto Scaling — CPU target tracking, min=1/max=3, 기본 ENABLED
 
-- 상태: 승인·운영 활성(2026-07-10) — ECS Application Auto Scaling이 `min=1`, `max=3`, CPU target 60%로 실제 생성되어 있다. AWS `describe-scalable-targets`·`describe-scaling-policies`로 상태를 확인했다.
+- 상태: AWS 운영 이력. 2026-07-10 실제 활성 상태를 검증했고, 2026-09-03 OCI 이전과 AWS 제거로 [ADR-0032](./0032-oci-arm64-self-hosted-migration.md)가 현재 runtime 결정을 대체한다.
 - 관련: `infra/terraform/autoscaling.tf`(신규), `infra/terraform/variables.tf`(`autoscaling_enabled`·
   `autoscaling_max`), `infra/terraform/ecs.tf`(`ignore_changes` 주석 보강), `infra/terraform/outputs.tf`
   (`autoscaling_status`), SPEC.md §7("오토스케일링/HPA=ECS Service Auto Scaling은 P4에서 k6 부하테스트와

@@ -1,6 +1,6 @@
 # ADR-0028 — ALB를 CloudFront origin-facing으로 격리 (인터넷 직접 HTTP 노출 제거)
 
-- 상태: 승인 (apply 완료·라이브)
+- 상태: AWS 운영 이력. 당시 apply·라이브 검증 뒤 2026-09-03 OCI Caddy edge로 대체하고 ALB·CloudFront를 삭제했다.
 - 날짜: 2026-07-12
 - 관련: ADR-0004(동일 오리진 BFF), ADR-0015(CloudFront 무료 HTTPS)
 

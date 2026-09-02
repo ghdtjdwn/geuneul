@@ -3,6 +3,7 @@
 > 런타임 데이터 흐름 + 배포 파이프라인. 핵심(PostGIS 대용량 지리검색 · 실시간 UGC 시공간 스코어링)이 어디서 돌고, 요청이 브라우저에서 DB까지 어떻게 흐르는지 한 장으로.
 
 > 운영 상태(2026-09-03): Vercel frontend/BFF는 유지하고 AWS ECS·RDS·ElastiCache·S3 백엔드와 운영 데이터를 OCI ARM64 rootless Compose·Object Storage로 이전했다. 출발·도착 사양과 zero-loss/cutover 검증은 [ADR-0032](./adr/0032-oci-arm64-self-hosted-migration.md)와 [OCI 마이그레이션 기록](./OCI-MIGRATION.md)에 있다.
+> VM 전체의 서비스 분리, 자원 상한, backup과 저장공간은 [OCI 운영 구조와 용량](./OCI-RUNTIME.md)에 정리했다.
 > 결정 근거는 각 노드의 ADR 링크 참고([색인](./adr/README.md)).
 
 ## 전체 구성
@@ -100,7 +101,7 @@ flowchart LR
   GA --> VZ["Vercel 배포 (프론트)"]
 ```
 
-- **분리된 stage와 activate** — GitHub가 만든 ARM64 image archive를 checksum·revision label로 검증해 먼저 stage한다. initial DB/object 복원 뒤 같은 Git SHA만 activate하며, 이후 deploy는 health 실패 시 이전 release를 재기동한다([ADR-0032](./adr/0032-oci-arm64-self-hosted-migration.md)).
+- **최초 bootstrap과 일반 배포 분리** — 첫 마이그레이션에서는 ARM64 archive를 stage하고 DB/object 복원 뒤 같은 Git SHA를 activate했다. 현재 일반 release는 `deploy`가 pre-deploy off-host backup과 artifact를 검증한 뒤 활성화한다. Flyway 적용 뒤에는 이전 binary를 자동 기동하지 않는다([ADR-0032](./adr/0032-oci-arm64-self-hosted-migration.md)).
 - **제한된 운영 경계** — SSH key는 shell을 열 수 없는 root-owned gateway에 묶이고, 전용 rootless user 전체에 CPU·메모리·swap 상한을 둔다. PostGIS·Redis는 외부 포트를 열지 않는다.
 - **IaC** — private photos/backups bucket, 분리된 app/backup IAM, versioning과 lifecycle은 Terraform으로 관리한다. OCI에 bucket CORS API가 없어 브라우저 PUT만 자격증명 없는 Caddy gateway가 exact-origin preflight와 signed Host 전달을 담당한다.
 - **CI 게이트** — 공간쿼리·인제스천은 Testcontainers 실 PostGIS로, OCI 경로는 ARM64 PostGIS 기동·backend image build·Terraform·shell/Python 보안 테스트로 검증한다. 머지 전 `gh pr checks`로 Backend/Frontend를 확인한다(TS-025).

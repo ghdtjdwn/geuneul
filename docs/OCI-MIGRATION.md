@@ -1,6 +1,6 @@
-# AWS → OCI 무손실 마이그레이션 기록과 런북
+# AWS → OCI 무손실 마이그레이션 실행 기록
 
-이 문서는 AWS 백엔드를 OCI로 옮긴 실제 출발·도착 사양, 실행 순서와 검증 증거를 기록한다. 값이 있는 환경 파일, dump, object inventory, Terraform state는 커밋하지 않는다. 공개 문서에는 secret·account ID·OCID·IP·개인정보를 기록하지 않는다.
+이 문서는 AWS 백엔드를 OCI로 옮긴 실제 출발·도착 사양, 실행 순서와 검증 증거를 기록한다. 마이그레이션은 완료됐으며 아래 0–6절은 재실행 지침이 아니라 당시 runbook의 역사 기록이다. 현재 반복 배포는 [DEPLOY.md](../DEPLOY.md), VM 전체 운영 구조와 용량은 [OCI-RUNTIME.md](./OCI-RUNTIME.md)를 따른다. 값이 있는 환경 파일, dump, object inventory, Terraform state는 커밋하지 않는다. 공개 문서에는 secret·account ID·OCID·IP·개인정보를 기록하지 않는다.
 
 ## 완료 상태
 
@@ -9,6 +9,15 @@
 - OCI에서 매일 logical backup, private off-host Object Storage, 36시간 freshness health gate와 별도 empty-DB restore drill을 운영한다.
 - AWS의 ECS·ALB·CloudFront·ElastiCache와 관련 공인 IPv4는 컷오버 검증 뒤 제거했다. RDS·snapshot·S3·ECR·log도 OCI와 로컬 복사본을 재검증하고 별도 파괴 승인 뒤 제거했다.
 - 기존 OCI workload의 50GB Block Volume은 boot volume으로 checksum 이관하고 controlled reboot·양쪽 서비스 health를 확인한 뒤 분리·삭제했다. 현재 Block Volume은 0개이고 Always Free 표시 200GB boot volume만 남는다.
+
+## 2026-09-03 현재 runtime snapshot
+
+- OCI Console: `VM.Standard.A1.Flex` ARM64, 2 OCPU, 12GB RAM, 2Gbps network, Ubuntu 22.04.
+- Storage: Always Free 표시 200GB boot volume 1개, 추가 Block Volume 0개. 컷오버 직후 filesystem 여유는 약 140GiB였으며 현재 실시간 `df`로 오해하지 않는다.
+- Boot volume: Balanced 10 VPU/GB, Oracle-managed encryption, 주간 backup policy. Cross-region replication과 Full Stack DR은 비활성이다.
+- Geuneul: Spring app 0.55 CPU/1GiB, PostgreSQL 0.35 CPU/1.25GiB, Redis 0.10 CPU/192MiB. 상위 rootless user는 0.75 CPU/3GiB/swap 0으로 제한한다.
+- Agent: Compute Monitoring, Custom Logs Monitoring, Cloud Guard Workload Protection이 실행 중이다. 공개 SSH 22와 OCI Run Command는 정상 운영 경로로 사용하지 않는다.
+- 월별 공공데이터 자동 ingestion은 AWS EventBridge 삭제 뒤 OCI 대체 timer가 아직 없다. Health와 backup timer만 운영 중이다.
 
 ## 실제 출발·도착 사양
 
@@ -59,19 +68,19 @@ AWS 쓰기 동결
   → AWS 과금·원본 자원 삭제
 ```
 
-## 불변 조건
+## 실행 당시 불변 조건
 
-1. AWS ECS 쓰기를 멈추기 전에는 최종 dump를 만들지 않는다.
+1. AWS ECS 쓰기를 멈추기 전에는 최종 dump를 만들지 않았다.
 2. RDS snapshot, dump SHA-256, source table counts, S3 source inventory 중 하나라도 없으면 복원을 시작하지 않는다.
 3. restore는 앱이 정지된 빈 OCI DB에서만 실행한다.
 4. source/target table counts와 object key·size·SHA-256이 모두 일치하기 전에는 Vercel을 바꾸지 않는다.
-5. Vercel 사용자 흐름과 rollback을 확인하기 전에는 AWS 원본·snapshot·S3 object를 삭제하지 않는다.
+5. Vercel 사용자 흐름과 당시 rollback 가능성을 확인하기 전에는 AWS 원본·snapshot·S3 object를 삭제하지 않았다. 현재 AWS 원본은 검증·승인 뒤 삭제돼 AWS로의 rollback 경로는 없다.
 6. 모든 production 변경은 적용 직전 plan 또는 exact target을 다시 확인하고, 값이 있는 로그를 남기지 않는다.
 7. 정상 운영은 AWS·OCI 인프라 비용 0원이다. OCI boot+block 합계 200GB와 Object Storage 합계 20GB를 넘거나 Cost Analysis에 billable usage가 있으면 activate하지 않는다.
 8. production workflow는 `main` ref에서만 실행한다. GitHub `Production` environment에도 main-only deployment branch policy와 required reviewer를 설정하기 전에는 dispatch하지 않는다. `stage`는 image와 release file만 적재하며 service를 시작하지 않는다.
 9. application 쓰기를 먼저 정지한 뒤 release별 불변 marker와 함께 검증된 off-host logical backup을 완료한다. 같은 release 재시도도 object HEAD, nonzero size, retention age와 원격 dump SHA-256을 다시 검증한다. Backup이 실패하면 schema가 바뀌기 전이므로 이전 app만 재기동하고, Flyway 적용 뒤에는 이전 binary를 자동 시작하지 않는다. 이전 backup을 빈 DB에 명시적으로 복원·검증한 뒤에만 이전 binary를 시작할 수 있다.
 
-## 0. OCI 0원 운영 선행 조건
+## 0. 당시 OCI 0원 운영 선행 조건
 
 1. live instance metadata에서 `VM.Standard.A1.Flex`, 2 OCPU, 12GB와 실행 region을 확인한다. tenancy의 home region·Limits, Quotas and Usage·Cost Analysis를 함께 읽어 기존 Chuncheon instance가 실제 Always Free entitlement를 쓰고 있고 billable usage가 없는지 확인한다.
 2. 현재 root 200GB는 약 145GiB free이고 `/opt/marketvalley` 50GB volume은 약 2GiB만 사용한다. 기존 workload별 owner와 service를 식별한 뒤 first rsync, 정확한 서비스 stop, final rsync, file count·size·checksum, `/etc/fstab` 변경, 재기동·health 순으로 boot volume으로 옮긴다. 기존 volume은 rollback 관찰 동안 detach만 하고, 별도 파괴 승인 뒤 삭제한다.
@@ -79,7 +88,7 @@ AWS 쓰기 동결
 4. AWS source photos 총량, OCI versioning 증가분, initial DB dump와 14일 backup 보존량의 합계가 Object Storage 20GB 미만인지 계산한다. 초과하거나 증명할 수 없으면 컷오버를 중단한다.
 5. 새 compute, load balancer, 유료 database나 추가 block volume은 만들지 않는다. IAM, private bucket과 기존 NLB/Caddy만 재사용한다.
 
-## 1. AWS 계정 복구와 동결
+## 1. 당시 AWS 계정 복구와 동결
 
 1. Billing 화면에서 일회성 data rescue 비용을 승인받고 paid plan으로 계정을 재개한다. AWS 공식 정책상 Free plan 종료 뒤 보존 데이터를 내려받으려면 paid plan 전환이 필요하다. 이는 상시 운영 전환이 아니며 반출·OCI 검증 직후 비용 리소스 정리와 account 재폐쇄까지 한 작업 단위로 추적한다. 2026-09-01 확인 시 account는 suspended/closed 상태이고 미결제 잔액은 0원이었다.
 2. RDS, ECS service/task, S3, ECR, SSM, CloudFront, ALB, ElastiCache, EventBridge inventory를 timestamp와 함께 `.local/oci-migration/aws-inventory/`에 저장한다.
@@ -89,7 +98,7 @@ AWS 쓰기 동결
 
 RDS는 private subnet이므로 VPC 내부의 one-off ECS export task에서 PostgreSQL 16 `pg_dump`를 실행하고, 임시 S3 migration prefix에 dump·SHA-256·table counts를 업로드한다. RDS snapshot export-to-S3는 Parquet이므로 복원 입력으로 쓰지 않는다.
 
-## 2. AWS 데이터 반출
+## 2. 당시 AWS 데이터 반출
 
 1. dump와 checksum을 로컬 `.local/oci-migration/database/`로 내려받고 `sha256sum --check`를 통과시킨다.
 2. `pg_restore --list`가 archive를 읽는지 확인한다.
@@ -105,7 +114,7 @@ OBJECT_MIGRATION_CONFIRM=MIGRATE_GEUNEUL_OBJECTS \
 
 스크립트는 AWS를 삭제하지 않고 OCI에서 다시 내려받아 모든 파일 SHA-256까지 대조한다.
 
-## 3. OCI 기반 준비
+## 3. 당시 OCI 기반 준비
 
 1. `infra/oci/terraform/terraform.tfvars.example`을 `.local`에 복사해 실제 compartment와 이름을 채운다.
 2. `terraform init`, `fmt -check`, `validate`, 저장 plan을 검토한 뒤 photos/backups bucket과 lifecycle만 적용한다.
@@ -120,7 +129,7 @@ OBJECT_MIGRATION_CONFIRM=MIGRATE_GEUNEUL_OBJECTS \
 11. bootstrap 전후 boot filesystem의 실제 free space와 inode 사용률을 기록한다. bootstrap, stage, data start, activate와 상시 health는 40GiB 미만 또는 inode 90% 초과면 실패해야 한다. 이 gate를 낮추지 않는다.
 12. 기존 k3s의 CPU request·Pending Pod와 host `MemAvailable`을 다시 기록한다. Geuneul 기동 뒤 기존 workload의 Pending/Unknown 수가 증가하거나 memory available이 1GiB 아래로 내려가면 activate를 중단하고 Geuneul을 정지한다.
 
-## 4. DB 복원과 병렬 검증
+## 4. 당시 DB 복원과 병렬 검증
 
 ```bash
 infra/oci/scripts/validate-runtime.sh /absolute/production.env
@@ -153,7 +162,7 @@ OCI origin에서 아래를 확인한다.
 - Redis rate limit과 캐시, SSE LISTEN/NOTIFY, scheduled ingestion dry run
 - 컨테이너 memory/CPU/PID, PostgreSQL connection와 volume 여유, Caddy access/error log. `/object-storage/*`는 SigV4 query credential 보호를 위해 access log에서 제외하고 runtime/error log를 포함한 모든 URI query 값은 redaction해야 한다.
 
-## 5. Git·CI·배포와 Vercel 컷오버
+## 5. 당시 Git·CI·배포와 Vercel 컷오버
 
 1. feature branch에서 backend full gate, frontend gate, Terraform validate, shell/Python tests, ARM64 PostGIS smoke와 backend image build를 통과시킨다.
 2. secret scan, 의도한 파일만 commit/push, PR checks를 확인하고 merge한다.
@@ -161,11 +170,11 @@ OCI origin에서 아래를 확인한다.
 4. Vercel `GEUNEUL_API_BASE`를 OCI HTTPS origin으로 변경하고 production redeploy한다.
 5. Vercel same-origin `/api/*`를 통해 위 사용자 흐름을 다시 실행한다. 브라우저가 OCI origin을 직접 API base로 호출하면 실패다.
 
-rollback은 Vercel environment를 기존 CloudFront origin으로 되돌리고 redeploy하는 한 단계다. 단, AWS ECS/RDS가 동작하고 최종 dump 이후 OCI에만 생긴 write가 없을 때만 무손실 rollback이다. 컷오버 직후 write가 생기면 OCI가 새 source of truth이며 AWS로 단순 복귀하지 않는다.
+컷오버 당시의 짧은 rollback window에서는 Vercel environment를 기존 CloudFront origin으로 되돌릴 수 있었다. 그러나 OCI 검증과 별도 삭제 승인 뒤 AWS ECS/RDS/CloudFront를 제거했으므로 현재 이 rollback 경로는 존재하지 않는다. OCI가 유일한 production source of truth다.
 
 일반 OCI release는 기존 app을 정지해 쓰기를 동결한 뒤 final backup을 만든다. Backup 또는 off-host 재검증이 실패하면 Flyway 실행 전이므로 이전 app을 다시 시작한다. Backup 검증이 끝난 뒤 Flyway를 실행한 경우에는 이전 binary를 자동 시작하지 않는다. activation 실패 시 app은 정지된 상태로 남고, release별 `shared/predeploy-backup-<full-git-sha>` marker가 가리키는 dump·checksum·table counts와 off-host object를 먼저 확인한다. 이전 release로 복구하려면 application을 정지한 채 별도 빈 DB에 그 dump를 `RESTORE_CONFIRM=RESTORE_GEUNEUL`로 복원하고 `verify-database.sh`를 통과시킨 뒤, 운영자가 이전 binary와 복원된 schema의 호환성을 확인해 명시적으로 재기동한다. 기존 DB를 비우거나 교체하는 작업은 별도 파괴 승인 대상이며 restricted SSH gateway는 이를 자동화하지 않는다. Release pruning은 current와 `previous-release`가 가리키는 recovery release의 archive·Compose·scripts·backend image를 검증하고 항상 보존한다.
 
-## 6. 백업과 AWS 정리
+## 6. 당시 백업과 AWS 정리
 
 1. `backup-database.sh`로 첫 OCI logical backup을 만들고 Object Storage HEAD size를 검증한다.
 2. 별도 빈 DB에서 최신 backup restore drill을 한 번 더 통과시킨다.

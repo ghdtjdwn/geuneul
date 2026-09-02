@@ -1,8 +1,8 @@
 name: Deploy (OCI ARM64)
 
-# Production is manual while the AWS source data is being recovered. The first
-# run uses "stage" to transfer verified images without starting any service;
-# after DB/object restore and approval, "deploy" activates a verified release.
+# Production releases are manual. "stage" transfers verified artifacts without
+# changing services; the normal ongoing release path is "deploy". The separate
+# start-data/activate bootstrap was used only for the completed first migration.
 on:
   workflow_dispatch:
     inputs:

@@ -10,7 +10,7 @@
   <a href="https://geuneul.vercel.app/geuneul.apk"><img src="https://img.shields.io/badge/Android_APK-다운로드-3DDC84?logo=android&logoColor=white" alt="Android APK 다운로드" /></a>
 </p>
 
-[![API](https://img.shields.io/badge/API-live_health-17957e)](https://d2pedv974beobb.cloudfront.net/actuator/health)
+[![Production](https://img.shields.io/badge/production-Vercel_%2B_OCI-17957e)](https://geuneul.vercel.app)
 
 [![Public Data](https://img.shields.io/badge/공공데이터-150k%2B_POI-2f9e44)](#데이터--etl-멱등-적재--지오코딩)
 [![Radius p95](https://img.shields.io/badge/반경검색_p95-1.35s_로컬30만-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
@@ -53,12 +53,12 @@
 - 공간 검색은 DB 레이어에서 — 반경 `ST_DWithin` · 최근접 kNN `<->` · bounds 조회를 PostGIS GiST 인덱스로 처리한다. 프로덕션 저부하 k6로 반경 p95를 2.68s→~1.4s로 튜닝했고([ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)), 현재 코드는 fingerprint를 고정한 로컬 30만 places에서 p95 1.35s·실패율 0%를 재검증했다(조건이 달라 개선률은 직접 비교하지 않음, [ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - 멱등 ETL + 지오코딩 — `source + source_external_id` 자연키로 재실행해도 중복 없는 배치 upsert. 무더위쉼터 60,297 · 공중화장실 52,334 · 도서관 3,551 · 상권 카페/스터디카페 등 전국 표준데이터를 그대로 적재하고, WGS84 결측 좌표는 카카오 지오코딩으로 보완한다. V20 실행 원장은 retry/dead-letter/backfill/freshness를 원본 payload 없이 추적하며, API 부분 응답과 원격 CSV digest 불일치는 DB 변경 전에 실패시킨다([ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - 실시간 UGC 시공간 스코어링 — 제보(휘발성 상태)/후기(영구 평판) 2단 UGC를 신뢰도 가중으로 `survival_score`에 집계. 제보 급증은 Postgres `LISTEN/NOTIFY` → 멀티 인스턴스 팬아웃 → SSE로, 관심 장소 알림은 `INSERT … RETURNING`으로 정확히 1회 푸시한다([ADR-0016](./docs/adr/0016-realtime-report-surge-listen-notify-sse.md)·[0026](./docs/adr/0026-bookmark-status-change-notification.md)).
-- 서버 검증 보안 경계 — private S3 사진은 조건부 PUT과 일회성 claim으로 소유자·용도·실제 object metadata를 확인한 뒤에만 저장하고, 만료 미사용 object는 bounded cleanup한다. JWT login/logout은 같은 user row에서 직렬화하며 DB token version으로 기존 토큰 사본까지 폐기한다. Redis 레이트리밋은 ECS 인스턴스 간 공유한다([ADR-0031](./docs/adr/0031-security-boundaries-session-upload-rate-limit.md)).
+- 서버 검증 보안 경계 — private Object Storage 사진은 조건부 PUT과 일회성 claim으로 소유자·용도·실제 object metadata를 확인한 뒤에만 저장하고, 만료 미사용 object는 bounded cleanup한다. JWT login/logout은 같은 user row에서 직렬화하며 DB token version으로 기존 토큰 사본까지 폐기한다. Redis 레이트리밋은 app instance 간 공유한다([ADR-0031](./docs/adr/0031-security-boundaries-session-upload-rate-limit.md)).
 
 review와 photo claim은 하나의 transaction으로 commit/rollback하고, 후기에서 제거된 detached 사진은 현재 참조를 재확인한 뒤 cleanup합니다. V21 이전 claim 없는 사진은 기존 후기에서 제거할 수 있지만 자동 cleanup 대상은 아닙니다. 동시 첫 OAuth login·report cache stale reader·cleanup clock skew는 PostgreSQL lock·generation·DB clock을 각 일관성 경계로 삼습니다.
 보안 취약점은 공개 issue 대신 [GitHub private vulnerability reporting](./.github/SECURITY.md)으로 제보해 주세요.
 
-> 스택: Spring Boot 4 · Java 21 · PostgreSQL+PostGIS · Redis · AWS ECS Fargate(이전 원본) · OCI Ampere A1(이전 대상) · Terraform · Next.js(PWA)
+> 스택: Spring Boot 4 · Java 21 · PostgreSQL+PostGIS · Redis · OCI Ampere A1 · OCI Object Storage · Terraform · Next.js(PWA)
 
 ## 이용 방법
 
@@ -72,7 +72,7 @@ review와 photo claim은 하나의 transaction으로 commit/rollback하고, 후�
 
 브라우저의 애플리케이션 API는 동일 오리진 `/api/*` 서버 프록시(BFF)만 호출합니다. 사진 바이너리 PUT만 짧게 서명된 URL로 고정 Object Storage gateway에 전달하며, 그 외 공간 검색과 시공간 집계는 DB의 GiST 인덱스와 SQL 뷰에서 처리합니다([ADR-0004](./docs/adr/0004-frontend-same-origin-proxy.md), [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)).
 
-> 상세 다이어그램(런타임·ETL·배포 CI/CD)과 데모 스크린샷은 [docs/architecture.md](./docs/architecture.md). 기존 AWS 배포는 [DEPLOY.md](./DEPLOY.md), OCI 이전은 [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md).
+> 상세 다이어그램과 데모는 [docs/architecture.md](./docs/architecture.md), 현재 서버·서비스·용량은 [docs/OCI-RUNTIME.md](./docs/OCI-RUNTIME.md), 배포는 [DEPLOY.md](./DEPLOY.md), 이전 증거는 [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md)에 있다.
 
 ## `survival_score` — 동작 방식
 
@@ -156,18 +156,18 @@ GET /alerts/stream            # text/event-stream (SSE)
 - 전체 기능·구현 방식·기술 스택: [`docs/FEATURES.md`](./docs/FEATURES.md)
 - 아키텍처·데모: [`docs/architecture.md`](./docs/architecture.md) · 의사결정 기록(ADR): [`docs/adr/`](./docs/adr) (0001–0032, [색인](./docs/adr/README.md))
 - 트러블슈팅: [브라우저 위치 좌표 지속 저장 제거](./docs/troubleshooting/location-storage-retention.md)
-- 배포(AWS): [`DEPLOY.md`](./DEPLOY.md)
+- 배포(OCI): [`DEPLOY.md`](./DEPLOY.md) · 서버 구조·용량: [`docs/OCI-RUNTIME.md`](./docs/OCI-RUNTIME.md)
 - AWS → OCI 무손실 이전 사양·실행 기록: [`docs/OCI-MIGRATION.md`](./docs/OCI-MIGRATION.md) · [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)
 - 디자인·API 계약 레퍼런스: [`docs/design-brief.md`](./docs/design-brief.md) · 프론트엔드: [`frontend/README.md`](./frontend/README.md)
 
 <details>
-<summary><b>구현 이력 (W0 → P5)</b></summary>
+<summary><b>구현 이력 (W0 → P5, AWS 항목은 2026-09-03 이전 운영 이력)</b></summary>
 
 - W0 — Spring Boot 4 + PostGIS/Flyway + Testcontainers CI + AWS(ECS Fargate·RDS·Terraform·OIDC) 배포 파이프라인.
 - P1 — 반경/kNN/bounds 공간검색 API 라이브 + 공공데이터 멱등 인제스천(쉼터 100건 + 공중화장실 59,768행 파서 → 카카오 지오코딩으로 52,334건 좌표 보완 + 전국 도서관 3,551건).
 - P2 · UGC+인증 — 휘발성 제보(11타입·타입별 TTL, 레이트리밋 XFF/OOM 하드닝 TS-008) · 소셜 로그인(카카오/구글 OAuth2+JWT, BFF code 교환) · 후기(review) 영구 평판(로그인, 장소당 1건 upsert) · 사진 presign(S3 SigV4, image 화이트리스트) · trust_score 실배선(로그인 제보 user_id 가중, V6) · 모더레이션(신고 + ADMIN 검수 큐, V7).
-- P3 · 스코어·추천·AI·데이터 — `survival_score`(SQL 뷰 + 순수 함수, 마커 3색, [ADR-0007](./docs/adr/0007-survival-score-sql-signals-java-compose.md)) · 시나리오 추천 [ADR-0008](./docs/adr/0008-recommendations-scenario-weighted-ranking.md) · 날씨(기상청 초단기실황 + Redis TTL 캐시) + comfort 복원([ADR-0009](./docs/adr/0009-weather-comfort-additive-restore.md)) · AI 한줄요약(프로바이더 중립 OpenAI 호환 클라이언트, graceful degradation, [ADR-0010](./docs/adr/0010-ai-summary-openrouter-provider.md)) · 공부공간 데이터 확장(CAFE/STUDY_CAFE·soft-delete, V5, [ADR-0006](./docs/adr/0006-study-space-coverage-expansion.md)) · 주기동기화(EventBridge→ECS RunTask + advisory lock, [ADR-0011](./docs/adr/0011-scheduled-public-data-sync.md)).
-- P4 · 성능·관측성 — k6 부하테스트 + EXPLAIN 인덱스 튜닝(반경/kNN/bounds GiST 사용 실증, V8 만료제보 인덱스, [ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)) · ECS Service Auto Scaling(CPU target-tracking, [ADR-0013](./docs/adr/0013-ecs-service-autoscaling.md)) · 관측성(Micrometer/Prometheus + OTel 트레이싱 + 로컬 Grafana/Tempo, [ADR-0014](./docs/adr/0014-observability-otel-micrometer-grafana.md)) · 무료 HTTPS(CloudFront 기본 도메인, [ADR-0015](./docs/adr/0015-cloudfront-default-domain-https.md)).
+- P3 · 스코어·추천·AI·데이터 — `survival_score`(SQL 뷰 + 순수 함수, 마커 3색, [ADR-0007](./docs/adr/0007-survival-score-sql-signals-java-compose.md)) · 시나리오 추천 [ADR-0008](./docs/adr/0008-recommendations-scenario-weighted-ranking.md) · 날씨(기상청 초단기실황 + Redis TTL 캐시) + comfort 복원([ADR-0009](./docs/adr/0009-weather-comfort-additive-restore.md)) · AI 한줄요약(프로바이더 중립 OpenAI 호환 클라이언트, graceful degradation, [ADR-0010](./docs/adr/0010-ai-summary-openrouter-provider.md)) · 공부공간 데이터 확장(CAFE/STUDY_CAFE·soft-delete, V5, [ADR-0006](./docs/adr/0006-study-space-coverage-expansion.md)) · AWS 운영 당시 주기동기화(EventBridge→ECS RunTask + advisory lock, [ADR-0011](./docs/adr/0011-scheduled-public-data-sync.md); OCI 대체 timer는 후속).
+- P4 · 성능·관측성 — k6 부하테스트 + EXPLAIN 인덱스 튜닝(반경/kNN/bounds GiST 사용 실증, V8 만료제보 인덱스, [ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)) · AWS 운영 당시 ECS Service Auto Scaling(CPU target-tracking, [ADR-0013](./docs/adr/0013-ecs-service-autoscaling.md))과 CloudFront 무료 HTTPS([ADR-0015](./docs/adr/0015-cloudfront-default-domain-https.md)) · 관측성(Micrometer/Prometheus + OTel 트레이싱 + 로컬 Grafana/Tempo, [ADR-0014](./docs/adr/0014-observability-otel-micrometer-grafana.md)).
 - P4 · 실시간·커뮤니티 — 실시간 제보 급증 알림(Postgres LISTEN/NOTIFY→SSE, 멀티 인스턴스 팬아웃, V9, [ADR-0016](./docs/adr/0016-realtime-report-surge-listen-notify-sse.md)) · 시간대별 혼잡 파생(자체 popular-times) · GPS 방문 인증(`verified`, ST_DWithin 100m, V10) · 추천 시나리오 focus/longstay · 후기 커뮤니티(댓글·리액션, V11) · 모더레이션 확장(신고 RESOLVED→콘텐츠 숨김, V12) · JaCoCo 0.70 게이트.
 - 데이터 커버리지(2026-07) — 화장실 52,334 · 무더위쉼터 60,297(냉방 정보 57,070) · 상권 카페/스터디카페(서울 + 6대 광역시 + 9개 도시) · 도서관 3,551. 총 15만+곳.
 - 기능 확장(PR #61~#99) — 시설 comfort SQL 통합(V13, [ADR-0017](./docs/adr/0017-place-feature-comfort-signal.md)) · 쉼터 냉방 백필 · 급증 SSE 프론트 · popular-times 히트맵 · bookmarks(V14) · 알림(V15, [ADR-0018](./docs/adr/0018-notifications-in-app-center-surge-reuse.md)) · 화장실/그늘 경유 경로([ADR-0019](./docs/adr/0019-routes-toilet-waypoint-external-directions.md)·[0027](./docs/adr/0027-shade-waypoint-route.md), 도로 폴리라인 [ADR-0021](./docs/adr/0021-road-polyline-kakao-navi-key-reuse.md)) · Web Push([ADR-0022](./docs/adr/0022-web-push-zerodep-vapid-feature-gated.md)) · 팔로우(V17·[ADR-0023](./docs/adr/0023-commons-safe-follow.md)) · 그늘/비 corridor([ADR-0024](./docs/adr/0024-shade-rain-route-corridor-overlay.md)) · 부하 기반 튜닝(V18·[ADR-0025](./docs/adr/0025-scale-prep-load-based-tuning.md)) · 데스크톱 3분할 · 신고/모더레이션 프론트 · a11y 포커스 트랩 · 관심장소 상태변화 알림([ADR-0026](./docs/adr/0026-bookmark-status-change-notification.md)).
