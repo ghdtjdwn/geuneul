@@ -1,4 +1,4 @@
--- 시설(place_features) → comfort 신호를 DB 레이어에서 집계하는 뷰 (A1, ADR-0017, CLAUDE.md §5).
+-- 시설(place_features) → comfort 신호를 DB 레이어에서 집계하는 뷰 (A1, ADR-0017, 점수 설계).
 --
 -- 배경: place_features(에어컨·콘센트·wifi·좌석·음수대·study_ok·quiet 등)는 지금까지 상세 화면의
 -- 등급 칩(FeatureGrade)으로 "표시"만 되고 survival_score에는 전혀 들어가지 않았다. 그 결과 냉방 쉼터·

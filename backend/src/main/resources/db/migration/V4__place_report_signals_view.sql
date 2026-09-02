@@ -1,6 +1,6 @@
--- survival_score의 시공간(spatio-temporal) 신호를 DB 레이어에서 계산하는 뷰 (ADR-0007, CLAUDE.md §5).
+-- survival_score의 시공간(spatio-temporal) 신호를 DB 레이어에서 계산하는 뷰 (ADR-0007, 점수 설계).
 --
--- 설계 의도(간판): "시공간 랭킹은 DB(PostGIS/SQL) 레이어에서 계산한다"(CLAUDE.md §5).
+-- 설계 의도(간판): "시공간 랭킹은 DB(PostGIS/SQL) 레이어에서 계산한다"(점수 설계).
 -- 장소별 유효(미만료) 제보를 최근성(freshness) 버킷 + 신뢰도(trust) 가중으로 집계해
 --   · freshness_score : 가장 신선한 제보의 최근성(순수 recency, 0~1)
 --   · comfort_score   : 긍정 신호(시원/자리/물/화장실) 누적, 신뢰도·최근성 가중, [0,1] 캡

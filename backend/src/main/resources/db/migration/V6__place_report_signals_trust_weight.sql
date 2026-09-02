@@ -1,4 +1,4 @@
--- trust_score 산출 지원 (CLAUDE.md §5 "제보는 trust_score로 가중", P2). 배경(WORKLOG 2026-07-09):
+-- trust_score 산출 지원 (점수 설계 "제보는 trust_score로 가중", P2). 배경(WORKLOG 2026-07-09):
 --
 -- place_report_signals 뷰(V4, ADR-0007)는 이미 처음부터 users.trust_score를 LEFT JOIN 해
 -- comfort_score/risk_score를 "익명 0.7 기저, 로그인 유저는 0.7~1.0(trust_score/100 비례)"로 가중한다
@@ -8,7 +8,7 @@
 -- 모든 로그인 유저가 신규 유저와 동일하게 0(=익명과 동일 0.7 가중치)이었다는 점이다 — 그 계산은
 -- TrustScoreService(Java, 온디맨드)가 새로 맡는다. 이 마이그레이션은 그 계산이 의존하는 카운트 쿼리
 -- (ReportRepository.countByUserId, ReviewRepository.countByUserId)를 전체스캔 없이 태우는 인덱스만 추가한다
--- (CLAUDE.md §0.4 "애플리케이션 레벨에서 전체 스캔하지 않는다"의 인덱스 원칙을 user_id 조회에도 적용).
+-- (인덱스 원칙 "애플리케이션 레벨에서 전체 스캔하지 않는다"의 인덱스 원칙을 user_id 조회에도 적용).
 --
 -- reports.user_id는 대다수가 NULL(여전히 익명이 주류)이므로 부분 인덱스로 크기를 아낀다.
 CREATE INDEX idx_reports_user ON reports (user_id) WHERE user_id IS NOT NULL;

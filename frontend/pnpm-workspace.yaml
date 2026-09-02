@@ -1,3 +1,6 @@
+allowBuilds:
+  unrs-resolver: true
+
 # pnpm 11: 네이티브 빌드 스크립트 허용 목록(공급망 안전 — 명시한 것만 빌드).
 # sharp = next/image 최적화, unrs-resolver = eslint import 해석, oxide = tailwind v4 엔진.
 onlyBuiltDependencies:
