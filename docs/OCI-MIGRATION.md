@@ -1,14 +1,63 @@
-# AWS → OCI 무손실 마이그레이션 런북
+# AWS → OCI 무손실 마이그레이션 기록과 런북
 
-이 문서는 AWS 백엔드를 OCI로 옮기는 실행 순서와 증거를 정의한다. 값이 있는 환경 파일, dump, object inventory, Terraform state는 커밋하지 않는다. 공개 문서에는 secret·OCID·IP·개인정보를 기록하지 않는다.
+이 문서는 AWS 백엔드를 OCI로 옮긴 실제 출발·도착 사양, 실행 순서와 검증 증거를 기록한다. 값이 있는 환경 파일, dump, object inventory, Terraform state는 커밋하지 않는다. 공개 문서에는 secret·account ID·OCID·IP·개인정보를 기록하지 않는다.
 
-## 현재 상태
+## 완료 상태
 
-- 완료: OCI S3 호환 코드, native ARM64 PostGIS 이미지, 제한된 Compose, Object Storage Terraform, DB backup/restore/verify, S3 왕복 SHA-256 검증 스크립트, 제한된 SSH release gateway와 수동 stage/deploy workflow
-- 로컬 실증: ARM64 전체 스택 health, Flyway V21, 분리된 빈 DB 복원과 전 테이블 행 수·제약·인덱스·SRID 검증
-- 라이브 확인: OCI A1 2 OCPU/12GB·Ubuntu 22.04 ARM64, boot 200GB + 별도 data volume 50GB, 기존 NLB 80/443와 backend health 정상, Object Storage bucket 0개, 계획 포트 13880 미사용. attached volume 합계 250GB는 Always Free boot+block 합계 200GB보다 50GB 크므로 현재 배치를 그대로 무료라고 가정하지 않는다.
-- 용량 경계: 기존 k3s CPU request 1,920m/2,000m(96%)와 Pending Pod 2개가 이미 존재한다. Geuneul은 k3s 밖의 별도 rootless cgroup 0.75 CPU·3GB로 격리하지만 실제 host CPU contention은 안정화 관찰 대상이다.
-- 대기: 일회성 AWS paid data rescue 승인, AWS 원본 inventory/export, OCI 50GB data volume 무손실 재배치와 Cost Analysis 0원 확인, live bucket·Customer Secret Key, server bootstrap 실제 적용, Caddy route, Vercel cutover
+- 2026-09-03 production cutover 완료. Vercel frontend/BFF의 공개 URL과 same-origin `/api/*` 계약은 유지하고 서버 전용 `GEUNEUL_API_BASE`만 OCI HTTPS origin으로 변경했다.
+- AWS 최종 복구 지점의 PostgreSQL dump와 사진을 OCI에 복원했다. 테이블별 행 수, Flyway, PostGIS, 제약·인덱스, SRID와 객체 SHA-256을 컷오버 전에 검증했다.
+- OCI에서 매일 logical backup, private off-host Object Storage, 36시간 freshness health gate와 별도 empty-DB restore drill을 운영한다.
+- AWS의 ECS·ALB·CloudFront·ElastiCache와 관련 공인 IPv4는 컷오버 검증 뒤 제거했다. RDS·snapshot·S3·ECR·log도 OCI와 로컬 복사본을 재검증하고 별도 파괴 승인 뒤 제거했다.
+- 기존 OCI workload의 50GB Block Volume은 boot volume으로 checksum 이관하고 controlled reboot·양쪽 서비스 health를 확인한 뒤 분리·삭제했다. 현재 Block Volume은 0개이고 Always Free 표시 200GB boot volume만 남는다.
+
+## 실제 출발·도착 사양
+
+| 계층 | AWS 출발 구성 | OCI 도착 구성 |
+|---|---|---|
+| 리전·아키텍처 | 서울 `ap-northeast-2`, 관리형 x86 계층 | 춘천 `ap-chuncheon-1`, ARM64 |
+| 프론트/BFF | Vercel Next.js, 서버 전용 origin이 CloudFront를 가리킴 | Vercel 유지, 서버 전용 origin만 OCI HTTPS로 변경 |
+| 공개 edge | CloudFront HTTP/2·3, cache disabled → ALB HTTP listener | 기존 OCI public edge와 Caddy HTTPS/SNI route 재사용, 신규 LB 없음 |
+| 애플리케이션 | ECS Fargate 0.5 vCPU·1GB, desired 1, CPU 60% target tracking 1–3 tasks, task별 public IP | 기존 `VM.Standard.A1.Flex` 2 OCPU·12GB VM의 전용 rootless Docker user, cgroup `CPUQuota=75%`, `MemoryMax=3G`, swap 0 |
+| 데이터베이스 | RDS PostgreSQL 16 `db.t3.micro`, Single-AZ, private subnet, encrypted gp3 20GB, PITR 1일 | PostgreSQL 16.15 + PostGIS 3.6.4 native ARM64, 전용 rootless volume·internal network, admin/app role 분리 |
+| 캐시 | ElastiCache Redis 7.1 `cache.t3.micro` 1 node, private subnet | Redis 7.4, 192MiB container limit, internal network, AOF와 bounded memory |
+| 객체 저장소 | private S3, public access block, presigned PUT/GET | private OCI Object Storage 두 bucket, S3 compatibility API, photo versioning·이전 버전 30일, DB backup 14일 lifecycle |
+| 배포·비밀 | ECR, ECS task definition, SSM Parameter Store, GitHub OIDC deploy | GitHub ARM64 archive build, SHA-256·architecture·revision 검증, forced-command SSH gateway, mode-0600 env |
+| 관측·복구 | CloudWatch log 14일, RDS snapshot/PITR | bounded Docker log, 15분 health timer, 매일 custom dump, off-host checksum 검증, empty-DB restore drill |
+| 스토리지 비용 경계 | RDS·snapshot·S3 사용량에 따라 과금 | Always Free 표시 200GB boot volume만 사용, 추가 Block Volume 0개; Object Storage 20GB 한도 안에서 운영 |
+
+Geuneul 컨테이너별 상한은 app 0.55 CPU·1GiB, PostgreSQL 0.35 CPU·1.25GiB, Redis 0.10 CPU·192MiB다. 합산 요청보다 상위 rootless user cgroup의 0.75 CPU·3GB 제한이 우선하며, 같은 VM의 다른 서비스와 장애 범위를 분리한다.
+
+## 실제 이전 데이터와 검증 결과
+
+| 항목 | 결과 |
+|---|---|
+| AWS 최종 복구 지점 | 계정 중단 전에 남은 자동 백업의 2026-08-20 23:44:30 UTC latest-restorable-time |
+| 논리 export | PostgreSQL custom dump 8,786,680 bytes, SHA-256 검증 |
+| 관계형 데이터 | public table 19개, 합계 267,020행을 source/target TSV exact diff |
+| 공간·schema | Flyway V1–V21 성공, PostGIS 3.6.4, 제약·index 존재, 장소 geometry SRID 4326 |
+| 사진 객체 | 1개, 2,313,497 bytes; AWS → local → OCI → 재다운로드 key·size·SHA-256 일치 |
+| 첫 OCI 운영 백업 | custom dump 8,784,556 bytes; Object Storage upload 후 재다운로드 SHA-256 일치 |
+| 복구 훈련 | 별도 tmpfs PostgreSQL에 single-transaction 복원; 앱 table 18개, 핵심 3개 table 181,884행, Flyway·PostGIS·SRID 검증 후 임시 환경 제거 |
+| 컷오버 smoke | OCI readiness 200, Vercel BFF 장소 3건, 상세·리뷰 200, 긴급 추천 5건, PWA 자산 200 |
+| 격리 확인 | OCI backend hostname이 client JavaScript bundle에 없고, MarketValley health와 Geuneul app·DB·Redis health 유지 |
+
+custom dump byte 크기는 실행 시점 metadata와 압축 결과에 따라 달라질 수 있으므로 동일성 판정에 파일 크기만 쓰지 않았다. 각 dump의 자체 SHA-256, archive parse, 테이블별 행 수와 schema/PostGIS 검증을 함께 사용했다.
+
+## 마이그레이션 흐름
+
+```text
+AWS 쓰기 동결
+  → terminal RDS 대신 latest PITR로 일회성 rescue DB 복원
+  → pg_dump + SHA-256 + table-count TSV 반출
+  → AWS S3 객체 inventory와 local checksum 생성
+  → 빈 OCI PostgreSQL에 single-transaction restore
+  → source/target 19개 table exact diff + PostGIS/Flyway 검증
+  → OCI Object Storage 업로드 후 재다운로드 SHA-256 검증
+  → merge SHA release activation + off-host backup
+  → Vercel server-only origin 변경과 production redeploy
+  → 사용자 경로·restore drill 검증
+  → AWS 과금·원본 자원 삭제
+```
 
 ## 불변 조건
 

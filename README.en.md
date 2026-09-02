@@ -22,7 +22,7 @@
 [![Frontend CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml)
 [![Deploy (OCI ARM64)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml)
 
-> Migration status (2026-09-01): the Vercel frontend remains available, while the backend stopped after the AWS Free plan ended. A data-preserving migration to OCI ARM64 is in progress and Vercel has not been cut over yet. See the [AWS-to-OCI migration runbook](./docs/OCI-MIGRATION.md).
+> Production status (2026-09-03): the Vercel frontend/BFF remains in place, while the AWS backend and operating data have been migrated to OCI Ampere A1. The [AWS-to-OCI migration record](./docs/OCI-MIGRATION.md) documents the source and target specifications, PITR recovery, integrity checks, and cutover.
 
 ## Screenshots
 
@@ -154,7 +154,7 @@ GET /alerts/stream
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS (Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16.2.12 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
-| Infrastructure | Vercel frontend/BFF · AWS ECS/RDS source · OCI ARM64 rootless Compose/Object Storage target · Terraform |
+| Infrastructure | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform · retired AWS ECS/RDS source |
 | Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate · DB/request-seeded k6 JSON summaries · gitleaks · CodeQL · Dependabot · local-only Swagger |
 
 ## Documentation
@@ -164,7 +164,7 @@ GET /alerts/stream
 - Architecture and screenshots: [docs/architecture.md](./docs/architecture.md)
 - Technical decision records: [docs/adr/](./docs/adr) ([index](./docs/adr/README.md), 0001–0032)
 - AWS deployment: [DEPLOY.md](./DEPLOY.md)
-- AWS-to-OCI data-preserving migration: [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md) · [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)
+- AWS-to-OCI source/target specifications and data-preserving migration record: [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md) · [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)
 - Design and API reference: [docs/design-brief.md](./docs/design-brief.md)
 
 ## Delivered capabilities

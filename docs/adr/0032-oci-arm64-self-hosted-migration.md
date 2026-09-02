@@ -1,6 +1,6 @@
 # ADR-0032 — Vercel 프론트 유지 + OCI ARM64 자가운영 백엔드로 무손실 이전
 
-- 상태: 승인, 구현·로컬 복원 검증 완료 / 라이브 데이터 이전 대기
+- 상태: 승인, production 이전·검증 완료
 - 날짜: 2026-09-01
 - 관련: ADR-0004(동일 오리진 BFF), ADR-0029(RDS 스냅샷 복원), ADR-0031(세션·업로드 경계), TS-040
 
@@ -83,16 +83,16 @@ K3s·MarketValley·Geuneul이 같은 200GB boot filesystem을 공유하므로 bo
 
 ## 결과와 위험
 
-- AWS paid plan은 원본 반출 구간에만 사용하고, 정상 운영의 AWS·OCI 인프라 비용을 0원으로 만든다.
+- 2026-09-03 AWS의 2026-08-20 23:44:30 UTC 최종 PITR에서 public table 19개·267,020행과 사진 객체 1개를 OCI에 복원했다. source/target table count exact diff, 객체 재다운로드 SHA-256, Flyway V1–V21, PostGIS 3.6.4와 SRID 4326을 통과한 뒤 Vercel production origin을 전환했다.
+- AWS paid plan은 원본 반출 구간에만 사용했다. 컷오버·off-host backup·별도 empty-DB restore drill 뒤 ECS·ALB·CloudFront·ElastiCache·RDS·snapshot·S3·ECR을 제거해 AWS 상시 운영 계층을 없앴다.
 - frontend/BFF 계약을 유지해 컷오버가 환경변수 한 개로 제한된다.
 - AWS OIDC/ECR/ECS 자동 배포를 수동 승인 OCI ARM64 release pipeline으로 교체해, 중단된 AWS로의 오배포를 막고 initial data restore와 app activation을 분리한다.
 - 자체 DB 운영 책임(패치, 백업, 복구, 용량, 장애 대응)을 직접 진다.
 - 같은 VM의 다른 workload가 급증하면 메모리 경쟁이 생길 수 있다. resource limit, healthcheck, host 지표와 백업 복원 훈련으로 완화한다.
 - 라이브 사전 점검에서 기존 k3s CPU request가 1,920m/2,000m(96%)이고 `Insufficient cpu` Pending Pod 2개가 이미 있었다. Geuneul의 별도 cgroup은 Kubernetes 예약량에는 들어가지 않으므로 배치 자체는 가능하지만, 0.75 CPU 상한·점진 기동·기존 Pod 상태 비교를 컷오버 게이트로 둔다. Pending 수 증가나 host memory 1GiB 미만이면 중단한다.
-- OCI S3 compatibility의 실제 presigned conditional PUT, Caddy preflight/Host 전달, 중복 PUT 412는 라이브 버킷에서 마지막 계약 테스트를 통과해야 컷오버할 수 있다.
-- rootless bootstrap과 restricted release gateway는 로컬 정적·archive 보안 테스트를 통과했지만, 실제 OCI user cgroup·volume ACL·SSH forced command는 production 적용 전 plan과 적용 후 read-back이 필요하다.
-- live A1 compute는 Always Free 크기와 일치하지만 현재 attached volume 합계 250GB가 200GB 무료 한도를 넘는다. 기존 workload를 보존하는 data-volume→boot migration, 실제 Cost Analysis 0원, Object Storage 20GB 예산을 먼저 검증해야 한다.
-- AWS 원본은 OCI 검증·Vercel 종단 테스트·안정화 구간이 끝난 뒤에만 비용 리소스를 정리한다.
+- OCI S3 compatibility의 실제 presigned GET, Caddy exact-origin PUT preflight와 query log redaction을 live bucket에서 확인했다.
+- rootless bootstrap, 전용 cgroup, volume ACL과 restricted release gateway를 production에 적용했다. merge SHA, image revision, backup marker와 15분 health timer read-back을 운영 게이트로 유지한다.
+- 기존 workload의 별도 50GB volume 데이터는 200GB boot volume으로 two-pass copy·checksum·controlled reboot 검증을 마쳤다. production 안정화와 파괴 승인 뒤 rollback volume을 분리·삭제했으며, 현재 추가 Block Volume은 0개이고 boot volume은 Always Free 표시 200GB다. Object Storage 합계 20GB를 넘지 않도록 lifecycle을 유지한다.
 
 ## 검증 근거
 

@@ -126,12 +126,12 @@ report_freshness_score:
 - **Geocoding**: **카카오 로컬 API**(주소→좌표, 지번/도로명) — 공중화장실 WGS84 결측 보완. 결과 좌표는 저장(멱등·rate limit 회피).
 - **Cache**: Redis (날씨 초단기실황 TTL 캐시, rate limit, 조회 캐시)
 - **Realtime/Event**: 제보 급증 알림 등은 **Redis Streams / Postgres LISTEN·NOTIFY**로. (Kafka 등 과설계 금지 — 필요 입증 후에만.)
-- **Storage**: private S3 (제보/후기 사진, `If-None-Match:*` presigned PUT + 일회성 upload claim/HeadObject 검증 + 만료 미사용 object bounded cleanup)
+- **Storage**: private OCI Object Storage의 S3 compatibility API (제보/후기 사진, `If-None-Match:*` presigned PUT + 일회성 upload claim/HeadObject 검증 + 만료 미사용 object bounded cleanup)
 - **Auth**: **카카오/구글 소셜 로그인(OAuth2) + user row 직렬화·token_version으로 서버 폐기 가능한 JWT 세션**
 - **Map**: Kakao Maps (국내 POI/UX)
 - **AI**: OpenAI 호환 프로바이더 중립 클라이언트(장소 요약) — 곁다리, 교체는 config만
-- **Infra (AWS)**: **ECS Fargate**(관리형 컨테이너) + **RDS PostgreSQL(PostGIS)** + **Terraform(IaC)** + **GitHub Actions(OIDC로 키 없이 배포)** + **ECR** + ALB + CloudFront. 프론트는 Vercel. Docker Compose는 로컬 개발용.
-  - NAT 게이트웨이 없이 Fargate는 퍼블릭 서브넷(SG로 잠금)에 두어 비용 절감. RDS·Redis는 프라이빗 서브넷.
+- **Infra (OCI, production)**: Vercel frontend/BFF + 기존 **OCI Ampere A1 2 OCPU/12GB ARM64**의 전용 rootless Compose(Spring Boot·PostgreSQL/PostGIS·Redis) + 기존 public edge/Caddy + private Object Storage + Terraform. user cgroup은 0.75 CPU·3GB·swap 0으로 격리한다.
+  - **AWS source**: 서울 리전 ECS Fargate 0.5 vCPU/1GB(1–3 tasks), RDS PostgreSQL 16 `db.t3.micro` encrypted gp3 20GB, ElastiCache Redis 7.1 `cache.t3.micro`, private S3, ALB와 CloudFront였다. 운영 데이터와 사진을 무결성 검증해 OCI로 이전한 뒤 제거했다([실행 기록](./OCI-MIGRATION.md)).
 - **Test/Ops**: Testcontainers(PG16+PostGIS/Redis), JaCoCo, k6(seed 고정 + JSON summary 부하테스트), OpenTelemetry/Grafana(인제스천 원장 freshness 포함), gitleaks.
 
 ## 8. ERD
