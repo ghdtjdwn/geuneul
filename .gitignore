@@ -48,6 +48,10 @@ crash.log
 tfplan
 # .terraform.lock.hcl 은 재현성 위해 커밋한다(무시하지 않음).
 
+# === Python tooling/tests ===
+__pycache__/
+*.py[cod]
+
 # === 디자인 핸드오프(로컬 참고용 — 2.7MB 프로토타입 HTML 포함, 커밋 안 함) ===
 design_handoff_geuneul/
 

@@ -15,12 +15,14 @@
 [![Public Data](https://img.shields.io/badge/공공데이터-150k%2B_POI-2f9e44)](#데이터--etl-멱등-적재--지오코딩)
 [![Radius p95](https://img.shields.io/badge/반경검색_p95-1.35s_로컬30만-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
 [![Coverage](https://img.shields.io/badge/JaCoCo-87.22%25-17957e)](#기술-스택)
-[![ADR](https://img.shields.io/badge/ADR-31-informational)](./docs/adr/README.md)
+[![ADR](https://img.shields.io/badge/ADR-32-informational)](./docs/adr/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](./LICENSE)
 
 [![CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml)
 [![Frontend CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml)
-[![Deploy (AWS ECS)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml)
+[![Deploy (OCI ARM64)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml)
+
+> 운영 이전 상태(2026-09-01): Vercel 프론트는 유지되고 AWS Free plan 종료로 백엔드는 중단돼 있다. 운영 데이터 보존을 전제로 OCI ARM64 이전을 진행 중이며 아직 Vercel 컷오버 전이다. 절차와 검증 게이트는 [AWS → OCI 무손실 마이그레이션 런북](./docs/OCI-MIGRATION.md)에 기록한다.
 
 ## 서비스 화면
 
@@ -56,7 +58,7 @@
 review와 photo claim은 하나의 transaction으로 commit/rollback하고, 후기에서 제거된 detached 사진은 현재 참조를 재확인한 뒤 cleanup합니다. V21 이전 claim 없는 사진은 기존 후기에서 제거할 수 있지만 자동 cleanup 대상은 아닙니다. 동시 첫 OAuth login·report cache stale reader·cleanup clock skew는 PostgreSQL lock·generation·DB clock을 각 일관성 경계로 삼습니다.
 보안 취약점은 공개 issue 대신 [GitHub private vulnerability reporting](./.github/SECURITY.md)으로 제보해 주세요.
 
-> 스택: Spring Boot 4 · Java 21 · PostgreSQL+PostGIS · Redis · AWS ECS Fargate · Terraform · Next.js(PWA)
+> 스택: Spring Boot 4 · Java 21 · PostgreSQL+PostGIS · Redis · AWS ECS Fargate(이전 원본) · OCI Ampere A1(이전 대상) · Terraform · Next.js(PWA)
 
 ## 이용 방법
 
@@ -68,9 +70,9 @@ review와 photo claim은 하나의 transaction으로 commit/rollback하고, 후�
 
 ![아키텍처 다이어그램](./docs/media/architecture.svg)
 
-브라우저는 동일 오리진 `/api/*` 서버 프록시(BFF)만 호출합니다. 이 경로로 ALB의 HTTP·CORS 제약을 피하고, 공간 검색과 시공간 집계는 DB의 GiST 인덱스와 SQL 뷰에서 처리합니다([ADR-0004](./docs/adr/0004-frontend-same-origin-proxy.md)).
+브라우저의 애플리케이션 API는 동일 오리진 `/api/*` 서버 프록시(BFF)만 호출합니다. 사진 바이너리 PUT만 짧게 서명된 URL로 고정 Object Storage gateway에 전달하며, 그 외 공간 검색과 시공간 집계는 DB의 GiST 인덱스와 SQL 뷰에서 처리합니다([ADR-0004](./docs/adr/0004-frontend-same-origin-proxy.md), [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)).
 
-> 상세 다이어그램(런타임·ETL·배포 CI/CD)과 데모 스크린샷은 [docs/architecture.md](./docs/architecture.md). 배포(AWS·OIDC·Terraform)는 [DEPLOY.md](./DEPLOY.md).
+> 상세 다이어그램(런타임·ETL·배포 CI/CD)과 데모 스크린샷은 [docs/architecture.md](./docs/architecture.md). 기존 AWS 배포는 [DEPLOY.md](./DEPLOY.md), OCI 이전은 [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md).
 
 ## `survival_score` — 동작 방식
 
@@ -145,16 +147,17 @@ GET /alerts/stream            # text/event-stream (SSE)
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS(Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16.2.12(App Router) · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist(PWA) — `frontend/` ([README](./frontend/README.md)) |
-| Infra | AWS ECS Fargate · RDS · Terraform · GitHub Actions(OIDC) · ECR · ALB · Vercel |
+| Infra | Vercel frontend/BFF · AWS ECS/RDS 원본 · OCI ARM64 rootless Compose/Object Storage 이전 대상 · Terraform |
 | Test/Ops | Testcontainers 2(실 PostGIS) · JaCoCo(게이트 70%) · DB/요청 seed 고정 k6+JSON summary · Prometheus/Grafana · gitleaks · CodeQL · Dependabot · 로컬 전용 Swagger |
 
 ## 문서
 
 - 프로젝트 스펙(목표·범위·ERD·API): [`docs/SPEC.md`](./docs/SPEC.md)
 - 전체 기능·구현 방식·기술 스택: [`docs/FEATURES.md`](./docs/FEATURES.md)
-- 아키텍처·데모: [`docs/architecture.md`](./docs/architecture.md) · 의사결정 기록(ADR): [`docs/adr/`](./docs/adr) (0001–0031, [색인](./docs/adr/README.md))
+- 아키텍처·데모: [`docs/architecture.md`](./docs/architecture.md) · 의사결정 기록(ADR): [`docs/adr/`](./docs/adr) (0001–0032, [색인](./docs/adr/README.md))
 - 트러블슈팅: [브라우저 위치 좌표 지속 저장 제거](./docs/troubleshooting/location-storage-retention.md)
 - 배포(AWS): [`DEPLOY.md`](./DEPLOY.md)
+- AWS → OCI 무손실 이전: [`docs/OCI-MIGRATION.md`](./docs/OCI-MIGRATION.md) · [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)
 - 디자인·API 계약 레퍼런스: [`docs/design-brief.md`](./docs/design-brief.md) · 프론트엔드: [`frontend/README.md`](./frontend/README.md)
 
 <details>

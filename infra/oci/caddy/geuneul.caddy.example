@@ -1,0 +1,85 @@
+# Merge this global logger filter and site block into the existing OCI edge
+# Caddyfile. If a global block already exists, merge the `log default` option
+# into it. The gateway has
+# no Object Storage credentials: OCI still validates the complete SigV4 query,
+# signed headers, conditional create, content type, and content length.
+{
+	# reverse_proxy failures are runtime logs rather than access logs, so redact
+	# query values in the default logger as well as the site access logger.
+	log default {
+		format filter {
+			request>uri regexp `\?.*$` `?REDACTED`
+			wrap json
+		}
+	}
+}
+
+{$GEUNEUL_SITE_ADDRESS} {
+	encode zstd gzip
+
+	# SigV4 query parameters contain temporary credentials. Exclude the complete
+	# upload gateway path from access logs rather than trying to redact selected
+	# parameters as the signing format evolves.
+	@presigned_upload_path path /object-storage/*
+	log_skip @presigned_upload_path
+
+	@upload_preflight {
+		method OPTIONS
+		path /object-storage/*
+		header Origin {$GEUNEUL_FRONTEND_ORIGIN}
+		header Access-Control-Request-Method PUT
+	}
+	handle @upload_preflight {
+		header Access-Control-Allow-Origin "{$GEUNEUL_FRONTEND_ORIGIN}"
+		header Access-Control-Allow-Methods "PUT, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, If-None-Match"
+		header Access-Control-Max-Age "600"
+		header Vary "Origin"
+		respond "" 204
+	}
+
+	# Strip only the local gateway prefix. The remaining path and SigV4 query are
+	# forwarded unchanged, while Host is restored to the exact signed OCI host.
+	@upload_put {
+		method PUT
+		path /object-storage/*
+		header Origin {$GEUNEUL_FRONTEND_ORIGIN}
+	}
+	handle @upload_put {
+		uri strip_prefix /object-storage
+		header Access-Control-Allow-Origin "{$GEUNEUL_FRONTEND_ORIGIN}"
+		header Access-Control-Expose-Headers "ETag"
+		header Vary "Origin"
+		reverse_proxy https://{$GEUNEUL_OBJECT_STORAGE_HOST} {
+			header_up Host {$GEUNEUL_OBJECT_STORAGE_HOST}
+		}
+	}
+
+	@rejected_object_storage path /object-storage/*
+	handle @rejected_object_storage {
+		respond "" 403
+	}
+
+	handle {
+		reverse_proxy {$GEUNEUL_BACKEND_UPSTREAM}
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	log {
+		output stdout
+		# Keep paths for diagnosis but remove every query value from both access
+		# and reverse-proxy error entries. log_skip below still removes successful
+		# upload gateway access entries entirely.
+		format filter {
+			request>uri regexp `\?.*$` `?REDACTED`
+			wrap json
+		}
+	}
+}

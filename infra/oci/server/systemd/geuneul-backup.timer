@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Geuneul logical backup every day
+
+[Timer]
+OnCalendar=*-*-* 18:15:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+AccuracySec=1m
+Unit=geuneul-backup.service
+
+[Install]
+WantedBy=timers.target

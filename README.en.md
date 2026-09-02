@@ -15,12 +15,14 @@
 [![Public Data](https://img.shields.io/badge/Public_data-150k%2B_POI-2f9e44)](#data-etl)
 [![Radius p95](https://img.shields.io/badge/Radius_p95-1.35s_local_300k-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
 [![Coverage](https://img.shields.io/badge/JaCoCo-87.22%25-17957e)](#technology)
-[![ADR](https://img.shields.io/badge/ADR-31-informational)](./docs/adr/README.md)
+[![ADR](https://img.shields.io/badge/ADR-32-informational)](./docs/adr/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](./LICENSE)
 
 [![CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml)
 [![Frontend CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml)
-[![Deploy (AWS ECS)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml)
+[![Deploy (OCI ARM64)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml)
+
+> Migration status (2026-09-01): the Vercel frontend remains available, while the backend stopped after the AWS Free plan ended. A data-preserving migration to OCI ARM64 is in progress and Vercel has not been cut over yet. See the [AWS-to-OCI migration runbook](./docs/OCI-MIGRATION.md).
 
 ## Screenshots
 
@@ -56,7 +58,7 @@ On mobile, the map and bottom sheet support nearby discovery, while scenario rec
 Reviews and photo claims commit or roll back in one transaction. Claimless photos saved before V21 can be removed from existing reviews but remain outside automatic cleanup. PostgreSQL locks, cache generations, and database time provide the consistency boundaries for concurrent first OAuth login, late stale readers, and cleanup clock skew.
 Report security issues through [GitHub private vulnerability reporting](./.github/SECURITY.md), not a public issue.
 
-> Stack: Spring Boot 4 · Java 21 · PostgreSQL + PostGIS · Redis · AWS ECS Fargate · Terraform · Next.js PWA
+> Stack: Spring Boot 4 · Java 21 · PostgreSQL + PostGIS · Redis · AWS ECS Fargate (source) · OCI Ampere A1 (target) · Terraform · Next.js PWA
 
 ## Using the service
 
@@ -68,9 +70,9 @@ Report security issues through [GitHub private vulnerability reporting](./.githu
 
 ![Architecture diagram](./docs/media/architecture.svg)
 
-The browser calls only a same-origin `/api/*` server proxy (BFF). This avoids the ALB HTTP and CORS constraints. Spatial search and geo-temporal aggregation run through GiST indexes and SQL views in the database ([ADR-0004](./docs/adr/0004-frontend-same-origin-proxy.md)).
+Browser application APIs use only the same-origin `/api/*` BFF. Photo bytes are the sole exception: a short-lived signed PUT goes through a fixed Object Storage gateway, while spatial search and geo-temporal aggregation remain in GiST-backed SQL ([ADR-0004](./docs/adr/0004-frontend-same-origin-proxy.md), [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)).
 
-For runtime, ETL, CI/CD diagrams, and more screenshots, see [docs/architecture.md](./docs/architecture.md). AWS, OIDC, and Terraform deployment instructions are in [DEPLOY.md](./DEPLOY.md).
+For runtime, ETL, CI/CD diagrams, and more screenshots, see [docs/architecture.md](./docs/architecture.md). The existing AWS deployment is documented in [DEPLOY.md](./DEPLOY.md); the OCI migration is in [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md).
 
 ## `survival_score`
 
@@ -152,7 +154,7 @@ GET /alerts/stream
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS (Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16.2.12 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
-| Infrastructure | AWS ECS Fargate · RDS · Terraform · GitHub Actions with OIDC · ECR · ALB · Vercel |
+| Infrastructure | Vercel frontend/BFF · AWS ECS/RDS source · OCI ARM64 rootless Compose/Object Storage target · Terraform |
 | Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate · DB/request-seeded k6 JSON summaries · gitleaks · CodeQL · Dependabot · local-only Swagger |
 
 ## Documentation
@@ -160,8 +162,9 @@ GET /alerts/stream
 - Product scope, ERD, and API contract: [docs/SPEC.md](./docs/SPEC.md)
 - Complete feature, implementation, and stack guide: [docs/FEATURES.md](./docs/FEATURES.md) (Korean)
 - Architecture and screenshots: [docs/architecture.md](./docs/architecture.md)
-- Technical decision records: [docs/adr/](./docs/adr) ([index](./docs/adr/README.md), 0001–0031)
+- Technical decision records: [docs/adr/](./docs/adr) ([index](./docs/adr/README.md), 0001–0032)
 - AWS deployment: [DEPLOY.md](./DEPLOY.md)
+- AWS-to-OCI data-preserving migration: [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md) · [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)
 - Design and API reference: [docs/design-brief.md](./docs/design-brief.md)
 
 ## Delivered capabilities

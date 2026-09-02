@@ -1,97 +1,163 @@
-name: Deploy (AWS ECS)
+name: Deploy (OCI ARM64)
 
-# main에 백엔드 변경이 push되면: (테스트 통과 후) 이미지 빌드 → ECR push → ECS 태스크 리비전 갱신 → 롤링 배포.
-# 인증은 GitHub OIDC로 AWS 역할을 assume(장기 액세스키 없음 = 2026 베스트프랙티스).
-# 액션은 태그 하이재킹 방어를 위해 full commit SHA로 핀(ci.yml과 동일 정책).
+# Production is manual while the AWS source data is being recovered. The first
+# run uses "stage" to transfer verified images without starting any service;
+# after DB/object restore and approval, "deploy" activates a verified release.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/deploy.yml'
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Transfer images only, or transfer and activate the release
+        required: true
+        default: stage
+        type: choice
+        options:
+          - stage
+          - deploy
 
 permissions:
   contents: read
-  id-token: write        # OIDC 토큰 발급용
 
-# 배포 직렬화 — 연속 push 시 이전 run이 늦게 끝나며 최신 배포를 되돌리는 레이스 방지.
-# cancel-in-progress: false = 진행 중 배포는 완주시키고 다음 배포가 뒤에 줄 선다.
 concurrency:
-  group: deploy-ecs
+  group: deploy-oci-production
   cancel-in-progress: false
 
-env:
-  AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: geuneul
-  ECS_CLUSTER: geuneul
-  ECS_SERVICE: geuneul
-  ECS_TASK_FAMILY: geuneul
-  CONTAINER_NAME: geuneul
-
 jobs:
-  # 배포 게이트: 테스트(실 PostGIS Testcontainers)가 그린일 때만 deploy가 돈다.
-  # deploy.yml이 ci.yml과 독립 트리거라, 이 게이트가 없으면 테스트 실패 코드도 프로덕션까지 나간다.
-  test:
-    name: Test gate (Gradle, JDK 21)
+  authorize:
+    name: Authorize main branch dispatch
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Require the main branch ref
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$DISPATCH_REF" != "refs/heads/main" ]]; then
+            echo "::error::Production releases must be dispatched from refs/heads/main."
+            exit 1
+          fi
+
+  test:
+    name: Production test gate
+    needs: authorize
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
       - uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287  # v5
         with:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92  # v6
-      - run: ./gradlew test jacocoTestCoverageVerification
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85  # v4.0.0
+        with:
+          terraform_version: 1.15.7
+          terraform_wrapper: false
+      - name: Backend gate
+        working-directory: backend
+        run: ./gradlew test jacocoTestCoverageVerification
+      - name: Infrastructure gate
+        run: |
+          find infra/oci -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          GEUNEUL_CADDY_INTEGRATION=1 \
+            python3 -m unittest discover -s infra/oci/tests -p 'test_*.py'
+          terraform -chdir=infra/oci/terraform fmt -check
+          terraform -chdir=infra/oci/terraform init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/oci/terraform validate
 
   deploy:
-    name: Build & Deploy to ECS
-    needs: test          # ← 테스트 그린일 때만 배포
+    name: ${{ inputs.operation }} OCI production release
+    needs: [authorize, test]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8  # v4.2.0
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}   # Terraform output github_actions_role_arn
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64  # v2
-
-      - name: Build & push image
-        id: build
-        working-directory: backend
+          platforms: arm64
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c  # v4.2.0
+      - name: Build verified ARM64 image archives
         env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          RELEASE_SHA: ${{ github.sha }}
         run: |
-          IMAGE="$REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
-
-      - name: Fetch current task definition
+          docker buildx build --platform linux/arm64 \
+            --build-arg "APP_VERSION=$RELEASE_SHA" \
+            --cache-from type=gha,scope=geuneul-backend-arm64 \
+            --cache-to type=gha,mode=max,scope=geuneul-backend-arm64 \
+            --tag "geuneul-backend:$RELEASE_SHA" \
+            --output "type=docker,dest=${RUNNER_TEMP}/backend-image.tar" backend
+          docker buildx build --platform linux/arm64 \
+            --cache-from type=gha,scope=geuneul-postgis-arm64 \
+            --cache-to type=gha,mode=max,scope=geuneul-postgis-arm64 \
+            --tag geuneul-postgis:16.15-3.6.4 \
+            --output "type=docker,dest=${RUNNER_TEMP}/postgis-image.tar" infra/oci/postgis
+          docker load --input "${RUNNER_TEMP}/backend-image.tar" >/dev/null
+          docker load --input "${RUNNER_TEMP}/postgis-image.tar" >/dev/null
+          test "$(docker image inspect --format '{{.Architecture}}' "geuneul-backend:$RELEASE_SHA")" = arm64
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "geuneul-backend:$RELEASE_SHA")" = "$RELEASE_SHA"
+          test "$(docker image inspect --format '{{.Architecture}}' geuneul-postgis:16.15-3.6.4)" = arm64
+      - name: Assemble bounded release archive
+        env:
+          RELEASE_SHA: ${{ github.sha }}
         run: |
-          aws ecs describe-task-definition --task-definition "$ECS_TASK_FAMILY" \
-            --query taskDefinition > task-def.json
-
-      - name: Render new image into task definition
-        id: render
-        uses: aws-actions/amazon-ecs-render-task-definition@138c24f321fdbdf7edee4a685519d253cae2cdea  # v1
-        with:
-          task-definition: task-def.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ steps.build.outputs.image }}
-
-      - name: Deploy to ECS (rolling)
-        uses: aws-actions/amazon-ecs-deploy-task-definition@c465972ecbd160473f22e683363b422a5412a3de  # v2
-        with:
-          task-definition: ${{ steps.render.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          release_directory="${RUNNER_TEMP}/release"
+          archive="${RUNNER_TEMP}/geuneul-${RELEASE_SHA}.tar.gz"
+          mkdir -p "$release_directory/infra/oci/scripts"
+          install -m 0644 infra/oci/compose.production.yml "$release_directory/infra/oci/compose.production.yml"
+          install -m 0755 infra/oci/scripts/*.sh "$release_directory/infra/oci/scripts/"
+          install -m 0755 infra/oci/scripts/*.py "$release_directory/infra/oci/scripts/"
+          install -m 0600 "${RUNNER_TEMP}/backend-image.tar" "$release_directory/backend-image.tar"
+          install -m 0600 "${RUNNER_TEMP}/postgis-image.tar" "$release_directory/postgis-image.tar"
+          backend_digest="$(sha256sum "$release_directory/backend-image.tar" | awk '{print $1}')"
+          postgis_digest="$(sha256sum "$release_directory/postgis-image.tar" | awk '{print $1}')"
+          printf '%s\n' \
+            "source_sha=$RELEASE_SHA" \
+            "backend_archive_sha256=$backend_digest" \
+            "postgis_archive_sha256=$postgis_digest" \
+            >"$release_directory/release-manifest"
+          tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            -C "$release_directory" -czf "$archive" \
+            release-manifest backend-image.tar postgis-image.tar infra
+          archive_size="$(stat -c '%s' "$archive")"
+          test "$archive_size" -gt 0
+          test "$archive_size" -le 536870912
+          printf 'RELEASE_ARCHIVE=%s\n' "$archive" >>"$GITHUB_ENV"
+          printf 'RELEASE_DIGEST=%s\n' "$(sha256sum "$archive" | awk '{print $1}')" >>"$GITHUB_ENV"
+      - name: Transfer release through restricted SSH gateway
+        env:
+          DEPLOY_HOST: ${{ secrets.OCI_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.OCI_DEPLOY_USER }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.OCI_DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_HOST_KEY: ${{ secrets.OCI_DEPLOY_HOST_KEY }}
+          RELEASE_SHA: ${{ github.sha }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          test -n "$DEPLOY_HOST"
+          [[ "$DEPLOY_HOST_KEY" == "$DEPLOY_HOST "* ]]
+          key_file="${RUNNER_TEMP}/deploy-key"
+          known_hosts="${RUNNER_TEMP}/known-hosts"
+          trap 'rm -f "$key_file" "$known_hosts"' EXIT
+          install -m 0600 /dev/null "$key_file"
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" >"$key_file"
+          install -m 0600 /dev/null "$known_hosts"
+          printf '%s\n' "$DEPLOY_HOST_KEY" >"$known_hosts"
+          ssh-keygen -l -f "$key_file" >/dev/null
+          ssh-keygen -l -f "$known_hosts" >/dev/null
+          ssh -T \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$known_hosts" \
+            -i "$key_file" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "$OPERATION $RELEASE_SHA $RELEASE_DIGEST" <"$RELEASE_ARCHIVE"
+          if [[ "$OPERATION" == "deploy" ]]; then
+            current="$(ssh -T \
+              -o BatchMode=yes \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o "UserKnownHostsFile=$known_hosts" \
+              -i "$key_file" \
+              "$DEPLOY_USER@$DEPLOY_HOST" current)"
+            test "$current" = "$RELEASE_SHA"
+          fi

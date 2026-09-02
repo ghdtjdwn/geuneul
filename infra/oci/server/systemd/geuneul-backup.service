@@ -1,0 +1,19 @@
+[Unit]
+Description=Geuneul verified logical PostgreSQL backup
+After=docker.service
+Requires=docker.service
+ConditionPathExists=/opt/marketvalley/geuneul/current/infra/oci/scripts/backup-database.sh
+
+[Service]
+Type=oneshot
+Environment=DOCKER_HOST=unix://%t/docker.sock
+ExecStart=/opt/marketvalley/geuneul/current/infra/oci/scripts/backup-database.sh /opt/marketvalley/geuneul/shared/production.env /opt/marketvalley/geuneul/backups
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=2h
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
