@@ -11,5 +11,5 @@ CREATE TABLE bookmarks (
     CONSTRAINT uq_bookmarks UNIQUE (user_id, place_id)
 );
 
--- 마이페이지 "내 관심 장소" 목록 = user_id로 최신순. 전체스캔 방지(인덱스 원칙).
+-- 마이페이지 "내 관심 장소" 목록 = user_id로 최신순. 전체스캔 방지(CLAUDE.md §0.4).
 CREATE INDEX idx_bookmarks_user ON bookmarks (user_id, created_at DESC);

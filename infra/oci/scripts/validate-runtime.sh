@@ -112,6 +112,7 @@ else
 fi
 
 APP_IMAGE_TAG="$app_tag" GEUNEUL_ENV_FILE="$env_file" \
-  "${compose[@]}" --env-file "$env_file" --file "${oci_dir}/compose.production.yml" config --quiet
+  "${compose[@]}" --project-directory "$oci_dir" \
+    --env-file "$env_file" --file "${oci_dir}/compose.production.yml" config --quiet
 
 printf 'OCI runtime configuration is valid.\n'

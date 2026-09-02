@@ -56,6 +56,23 @@ class DeploymentContractTest(unittest.TestCase):
                 self.assertIn("AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED", script)
                 self.assertIn("AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED", script)
 
+    def test_database_operations_do_not_depend_on_the_invocation_directory(self) -> None:
+        runtime_library = (
+            REPOSITORY_ROOT / "infra/oci/scripts/runtime-lib.sh"
+        ).read_text(encoding="utf-8")
+        validator = (
+            REPOSITORY_ROOT / "infra/oci/scripts/validate-runtime.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('COMPOSE+=(--project-directory "$project_directory")', runtime_library)
+        self.assertIn('--project-directory "$oci_dir"', validator)
+        for name in ("backup-database.sh", "restore-database.sh", "verify-database.sh"):
+            with self.subTest(name=name):
+                script = (
+                    REPOSITORY_ROOT / "infra/oci/scripts" / name
+                ).read_text(encoding="utf-8")
+                self.assertIn('resolve_compose "$oci_dir"', script)
+
     def test_activation_has_a_verified_backup_and_explicit_restore_boundary(self) -> None:
         remote_release = (SERVER_ROOT / "remote-release.sh").read_text(encoding="utf-8")
         freeze = remote_release.index('freeze_application_writes "$previous_sha"')

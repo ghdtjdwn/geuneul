@@ -19,7 +19,7 @@ fail() {
   || fail "usage: verify-database.sh production.env source.table-counts.tsv [target-output.tsv]"
 [[ -f "$source_counts" && ! -L "$source_counts" ]] || fail "source table-count file is invalid"
 "${script_dir}/validate-runtime.sh" "$env_file"
-resolve_compose
+resolve_compose "$oci_dir"
 
 output_path="${target_counts:-$(mktemp /tmp/geuneul-target-counts.XXXXXX)}"
 GEUNEUL_ENV_FILE="$env_file" "${COMPOSE[@]}" \
