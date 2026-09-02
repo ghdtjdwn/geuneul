@@ -84,8 +84,8 @@ Grafana는 Prometheus를 직접 스크레이프하는 걸로 충분하고, OTLP 
 - `geuneul.place.search.radius{category}` — 반경 검색(`findWithinRadiusScored`, ST_DWithin geography)
 - `geuneul.place.search.nearest{category}` — kNN 최근접(`findNearest`, `<->` 연산자)
 
-SPEC.md의 핵심 차별점("PostGIS 대용량 지리검색(반경/kNN)")을 그대로 계측 대상으로 삼았다 — bounds는
-셋 중 하나만 고르라는 지시("1~2개")에 맞춰 뺐다(반경·kNN이 더 "간판"에 가깝다: ADR-0012 k6도 이
+SPEC.md의 핵심 차별점("PostGIS 대용량 지리검색(반경/kNN)")을 그대로 계측 대상으로 삼았다. 메트릭을
+1~2개로 제한해 bounds는 제외했다(반경·kNN이 더 "간판"에 가깝다: ADR-0012 k6도 이
 둘의 p95/p99를 핵심 지표로 이미 보고했다). `category` 태그는 `PlaceCategory` enum(고정 카디널리티,
 현재 10개 미만)이라 Prometheus 카디널리티 폭발 위험이 없다(무제한 값을 태그로 쓰지 않는다는
 Prometheus 표준 경고를 지킨다).

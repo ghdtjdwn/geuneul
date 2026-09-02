@@ -93,7 +93,7 @@ class FlagFlowIT extends AbstractIntegrationTest {
         adminToken = jwtService.issue(admin);
     }
 
-    // User.role은 정상 승격 경로가 이번 스코프 밖이라(작업 지시) 테스트 전용 리플렉션으로 ADMIN을
+    // User.role의 정상 승격 경로는 현재 권한 모델 범위 밖이라 테스트 전용 리플렉션으로 ADMIN을
     // 부여한다(ReviewServiceTest의 setId 리플렉션 패턴과 동일 근거 — 엔티티 프로덕션 계약은 안 바꾼다).
     private static void setRole(User user, Role role) {
         try {

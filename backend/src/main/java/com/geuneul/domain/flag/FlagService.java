@@ -56,7 +56,7 @@ public class FlagService {
     }
 
     /**
-     * 신고 접수. 같은 유저가 같은 대상을 다시 신고하면 409(스팸 신고 억제, docs/SPEC.md 작업 지시).
+     * 신고 접수. 같은 유저가 같은 대상을 다시 신고하면 409(스팸 신고 억제, docs/SPEC.md 중복 방지 정책).
      * 대상(report/review)이 존재하지 않으면 404 — 유령 대상에 큐가 쌓이지 않게.
      */
     @Transactional

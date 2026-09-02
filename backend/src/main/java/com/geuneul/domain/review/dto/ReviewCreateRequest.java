@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * 후기 작성/수정 요청. 로그인 필요 — user_id는 요청 바디로 받지 않고 JWT(AuthPrincipal)에서 취한다
- * (docs/SPEC.md 작업 지시). 사진 URL은 서버가 발급한 REVIEW claim의 소유자·완료 상태를 저장 전에 검증한다.
+ * (docs/SPEC.md 입력 계약). 사진 URL은 서버가 발급한 REVIEW claim의 소유자·완료 상태를 저장 전에 검증한다.
  */
 @Schema(description = "후기 작성/수정 요청 — 로그인 필요, 장소당 1건(재작성 시 갱신)")
 public record ReviewCreateRequest(
