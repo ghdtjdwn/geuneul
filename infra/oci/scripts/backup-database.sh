@@ -91,6 +91,8 @@ for path in "$dump_path" "$checksum_path" "$counts_path"; do
     --env-file "$aws_env" \
     --env AWS_DEFAULT_REGION="$region" \
     --env AWS_EC2_METADATA_DISABLED=true \
+    --env AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED \
+    --env AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED \
     --volume "${backup_root}:/backups:ro" \
     "$aws_cli_image" \
     --endpoint-url "$endpoint" s3 cp "/backups/$(basename "$path")" \
@@ -101,6 +103,8 @@ local_size="$(portable_file_size "$dump_path")"
 remote_size="$(
   docker run --rm --env-file "$aws_env" \
     --env AWS_DEFAULT_REGION="$region" --env AWS_EC2_METADATA_DISABLED=true \
+    --env AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED \
+    --env AWS_RESPONSE_CHECKSUM_VALIDATION=WHEN_REQUIRED \
     "$aws_cli_image" --endpoint-url "$endpoint" s3api head-object \
     --bucket "$bucket" --key "${remote_prefix}/${dump_name}" --query ContentLength --output text
 )"
