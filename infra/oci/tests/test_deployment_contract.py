@@ -65,7 +65,8 @@ class DeploymentContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn('COMPOSE+=(--project-directory "$project_directory")', runtime_library)
-        self.assertIn('--project-directory "$oci_dir"', validator)
+        self.assertIn('resolve_compose "$oci_dir"', validator)
+        self.assertIn('"${COMPOSE[@]}"', validator)
         for name in ("backup-database.sh", "restore-database.sh", "verify-database.sh"):
             with self.subTest(name=name):
                 script = (

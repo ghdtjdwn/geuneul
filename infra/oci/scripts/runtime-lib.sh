@@ -2,6 +2,12 @@
 
 resolve_compose() {
   local project_directory="${1:-}"
+  if [[ -n "$project_directory" ]]; then
+    cd -- "$project_directory" || {
+      printf 'Docker Compose project directory is unavailable.\n' >&2
+      return 1
+    }
+  fi
   if docker compose version >/dev/null 2>&1; then
     COMPOSE=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
