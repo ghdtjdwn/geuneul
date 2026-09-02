@@ -1,213 +1,74 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1480 860" font-family="-apple-system, 'Segoe UI', 'Noto Sans KR', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 650" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif">
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#1f2328"/>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#334155"/>
     </marker>
-    <marker id="arrowDot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#6e7781"/>
-    </marker>
+    <style>
+      .box{fill:#fff;stroke:#334155;stroke-width:2}.group{fill:#f8fafc;stroke:#94a3b8;stroke-width:2}.title{font-size:20px;font-weight:700;fill:#0f172a}.label{font-size:16px;font-weight:650;fill:#0f172a}.small{font-size:13px;fill:#475569}.line{stroke:#334155;stroke-width:2;fill:none;marker-end:url(#arrow)}
+    </style>
   </defs>
+  <rect width="1200" height="650" fill="#fff"/>
+  <text x="40" y="42" class="title">Geuneul production architecture · AWS → OCI migration complete</text>
 
-  <!-- background -->
-  <rect x="0" y="0" width="1480" height="860" fill="#ffffff"/>
+  <rect x="40" y="95" width="210" height="150" rx="14" class="group"/>
+  <text x="60" y="126" class="label">Browser · PWA</text>
+  <rect x="65" y="150" width="160" height="65" rx="10" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+  <text x="145" y="178" text-anchor="middle" class="label">Next.js UI</text>
+  <text x="145" y="199" text-anchor="middle" class="small">same-origin /api/*</text>
 
-  <!-- ══════════════ AWS Cloud ══════════════ -->
-  <rect x="470" y="40" width="985" height="730" fill="#ffffff" stroke="#232f3e" stroke-width="2" rx="4"/>
-  <rect x="470" y="40" width="34" height="34" fill="#232f3e"/>
-  <text x="479" y="62" fill="#ffffff" font-size="11" font-weight="700">aws</text>
-  <text x="514" y="62" fill="#232f3e" font-size="15" font-weight="700">AWS Cloud</text>
+  <rect x="310" y="95" width="220" height="150" rx="14" class="group"/>
+  <text x="330" y="126" class="label">Vercel</text>
+  <rect x="335" y="150" width="170" height="65" rx="10" fill="#f1f5f9" stroke="#0f172a" stroke-width="2"/>
+  <text x="420" y="178" text-anchor="middle" class="label">Next Route BFF</text>
+  <text x="420" y="199" text-anchor="middle" class="small">server-only OCI origin</text>
 
-  <!-- VPC -->
-  <rect x="640" y="120" width="795" height="520" fill="#ffffff" stroke="#7aa116" stroke-width="2" rx="4"/>
-  <rect x="640" y="120" width="30" height="30" fill="#7aa116"/>
-  <path d="M648 138 a7 5 0 0 1 14 0 h-2 a5 4 0 0 0 -10 0 z" fill="#ffffff"/>
-  <text x="678" y="140" fill="#3f6212" font-size="13" font-weight="700">VPC</text>
+  <rect x="590" y="70" width="570" height="500" rx="18" fill="#fff7ed" stroke="#f97316" stroke-width="2.5"/>
+  <text x="615" y="108" class="title">OCI · Chuncheon · ARM64</text>
+  <rect x="620" y="135" width="510" height="75" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+  <text x="875" y="165" text-anchor="middle" class="label">Existing public edge · Caddy HTTPS/SNI</text>
+  <text x="875" y="188" text-anchor="middle" class="small">API route + credential-free Object Storage upload gateway</text>
 
-  <!-- Public subnet -->
-  <rect x="665" y="165" width="360" height="450" fill="#f2f8ec" stroke="none" rx="3"/>
-  <rect x="665" y="165" width="26" height="26" fill="#7aa116"/>
-  <rect x="672" y="176" width="12" height="9" rx="1.5" fill="#ffffff"/>
-  <path d="M674.5 176 v-3 a3.5 3.5 0 0 1 7 0 v3" fill="none" stroke="#ffffff" stroke-width="1.6"/>
-  <text x="699" y="183" fill="#3f6212" font-size="12.5" font-weight="700">Public subnet</text>
+  <rect x="620" y="240" width="510" height="205" rx="14" class="group"/>
+  <text x="645" y="272" class="label">A1 Flex 2 OCPU · 12GB · rootless cgroup 0.75 CPU / 3GB</text>
+  <rect x="645" y="300" width="145" height="105" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="718" y="333" text-anchor="middle" class="label">Spring Boot</text>
+  <text x="718" y="356" text-anchor="middle" class="small">Java 21 · API</text>
+  <text x="718" y="378" text-anchor="middle" class="small">0.55 CPU · 1GiB</text>
+  <rect x="805" y="300" width="180" height="105" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="895" y="333" text-anchor="middle" class="label">PostgreSQL 16</text>
+  <text x="895" y="356" text-anchor="middle" class="small">PostGIS 3.6 · SRID 4326</text>
+  <text x="895" y="378" text-anchor="middle" class="small">0.35 CPU · 1.25GiB</text>
+  <rect x="1000" y="300" width="105" height="105" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="1053" y="333" text-anchor="middle" class="label">Redis 7.4</text>
+  <text x="1053" y="356" text-anchor="middle" class="small">cache · rate</text>
+  <text x="1053" y="378" text-anchor="middle" class="small">192MiB</text>
 
-  <!-- Private subnet -->
-  <rect x="1055" y="165" width="355" height="450" fill="#eef4fb" stroke="none" rx="3"/>
-  <rect x="1055" y="165" width="26" height="26" fill="#2e73b8"/>
-  <rect x="1062" y="176" width="12" height="9" rx="1.5" fill="#ffffff"/>
-  <path d="M1064.5 176 v-3 a3.5 3.5 0 0 1 7 0 v3" fill="none" stroke="#ffffff" stroke-width="1.6"/>
-  <text x="1089" y="183" fill="#1e4e79" font-size="12.5" font-weight="700">Private subnet</text>
+  <rect x="620" y="475" width="330" height="68" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="785" y="503" text-anchor="middle" class="label">Private Object Storage</text>
+  <text x="785" y="525" text-anchor="middle" class="small">versioned photos · verified 14-day DB backups</text>
+  <rect x="970" y="475" width="160" height="68" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <text x="1050" y="503" text-anchor="middle" class="label">systemd timers</text>
+  <text x="1050" y="525" text-anchor="middle" class="small">backup · health</text>
 
-  <!-- ══ ECS Fargate (public subnet) ══ -->
-  <g>
-    <rect x="775" y="215" width="72" height="72" rx="10" fill="#ed7100"/>
-    <!-- container cubes glyph -->
-    <g stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linejoin="round">
-      <path d="M811 231 l14 8 v16 l-14 8 -14 -8 v-16 z"/>
-      <path d="M797 239 l14 8 14 -8 M811 247 v16"/>
-      <path d="M795 262 h32" stroke-dasharray="4 3.5"/>
-    </g>
-    <text x="811" y="305" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2328">ECS Fargate</text>
-    <text x="811" y="322" text-anchor="middle" font-size="11.5" fill="#57606a">Auto Scaling · min 1 / max 3</text>
-  </g>
+  <rect x="40" y="310" width="490" height="175" rx="14" class="group"/>
+  <text x="60" y="343" class="label">External APIs</text>
+  <text x="70" y="382" class="small">Kakao geocoding · routes</text>
+  <text x="70" y="414" class="small">KMA weather · public data</text>
+  <text x="70" y="446" class="small">AI summary provider</text>
+  <rect x="310" y="350" width="190" height="95" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+  <text x="405" y="382" text-anchor="middle" class="label">GitHub Actions</text>
+  <text x="405" y="405" text-anchor="middle" class="small">ARM64 build · tests</text>
+  <text x="405" y="427" text-anchor="middle" class="small">restricted release gateway</text>
 
-  <!-- Spring Boot inside task -->
-  <g>
-    <circle cx="811" cy="392" r="34" fill="#6db33f"/>
-    <circle cx="811" cy="392" r="34" fill="none" stroke="#ffffff" stroke-width="0"/>
-    <path d="M811 372 v18" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
-    <path d="M797 381 a19 19 0 1 0 28 0" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
-    <text x="811" y="446" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2328">Spring Boot 4 : 8080</text>
-    <text x="811" y="463" text-anchor="middle" font-size="11.5" fill="#57606a">Java 21 · ST_DWithin · kNN · survival_score</text>
-  </g>
+  <path d="M250 180H310" class="line"/>
+  <path d="M530 180H620" class="line"/>
+  <path d="M875 210V240" class="line"/>
+  <path d="M790 352H805" class="line"/>
+  <path d="M985 352H1000" class="line"/>
+  <path d="M718 405V475" class="line"/>
+  <path d="M1050 475V445" class="line"/>
+  <path d="M500 397H645" class="line"/>
+  <path d="M500 370Q560 300 645 330" class="line"/>
 
-  <!-- ALB (public subnet, lower) -->
-  <g>
-    <rect x="705" y="510" width="60" height="60" rx="9" fill="#8c4fff"/>
-    <g stroke="#ffffff" stroke-width="2.2" fill="none">
-      <circle cx="735" cy="540" r="7"/>
-      <circle cx="720" cy="524" r="3.6"/>
-      <circle cx="750" cy="524" r="3.6"/>
-      <circle cx="720" cy="556" r="3.6"/>
-      <circle cx="750" cy="556" r="3.6"/>
-      <path d="M730 535 l-7 -8 M740 535 l7 -8 M730 545 l-7 8 M740 545 l7 8"/>
-    </g>
-    <text x="735" y="588" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2328">ALB</text>
-  </g>
-
-  <!-- RDS (private subnet) -->
-  <g>
-    <path d="M1160 226 a52 16 0 0 1 104 0 v54 a52 16 0 0 1 -104 0 z" fill="#2e73b8"/>
-    <ellipse cx="1212" cy="226" rx="52" ry="16" fill="#5b96cf"/>
-    <text x="1212" y="322" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2328">RDS PostgreSQL</text>
-    <text x="1212" y="339" text-anchor="middle" font-size="11.5" fill="#57606a">PostGIS · geometry(Point,4326) · GiST</text>
-  </g>
-
-  <!-- ElastiCache Redis (private subnet) -->
-  <g>
-    <path d="M1168 500 a44 13 0 0 1 88 0 v44 a44 13 0 0 1 -88 0 z" fill="#d82c20"/>
-    <ellipse cx="1212" cy="500" rx="44" ry="13" fill="#e8695f"/>
-    <text x="1212" y="586" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2328">ElastiCache Redis</text>
-    <text x="1212" y="603" text-anchor="middle" font-size="11.5" fill="#57606a">날씨 TTL · 조회 캐시</text>
-  </g>
-
-  <!-- ECR (AWS, above VPC) -->
-  <g>
-    <rect x="760" y="52" width="52" height="52" rx="8" fill="#ed7100"/>
-    <g stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linejoin="round">
-      <path d="M786 62 l11 6.5 v13 l-11 6.5 -11 -6.5 v-13 z"/>
-      <path d="M775 68.5 l11 6.5 11 -6.5 M786 75 v13"/>
-    </g>
-    <text x="838" y="73" font-size="13" font-weight="700" fill="#1f2328">ECR</text>
-    <text x="838" y="90" font-size="11.5" fill="#57606a">컨테이너 이미지</text>
-  </g>
-
-  <!-- CloudFront (AWS, outside VPC) -->
-  <g>
-    <rect x="520" y="365" width="64" height="64" rx="9" fill="#8c4fff"/>
-    <g stroke="#ffffff" stroke-width="2.2" fill="none">
-      <circle cx="552" cy="397" r="17"/>
-      <ellipse cx="552" cy="397" rx="7.5" ry="17"/>
-      <path d="M536 391 h32 M536 403 h32"/>
-    </g>
-    <text x="552" y="450" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2328">CloudFront</text>
-    <text x="552" y="467" text-anchor="middle" font-size="11.5" fill="#57606a">HTTPS</text>
-  </g>
-
-  <!-- S3 (AWS, below VPC) -->
-  <g>
-    <path d="M1170 680 l6 56 a36 10 0 0 0 72 0 l6 -56 z" fill="#c7362f"/>
-    <ellipse cx="1212" cy="680" rx="42" ry="12" fill="#e05a52"/>
-    <text x="1274" y="702" font-size="13" font-weight="700" fill="#1f2328">S3</text>
-    <text x="1274" y="719" font-size="11.5" fill="#57606a">제보·후기 사진 (presigned URL)</text>
-  </g>
-
-  <!-- EventBridge (AWS, below VPC) -->
-  <g>
-    <rect x="700" y="672" width="56" height="56" rx="9" fill="#e7157b"/>
-    <g stroke="#ffffff" stroke-width="2.2" fill="none">
-      <circle cx="728" cy="700" r="14"/>
-      <path d="M728 691 v9 l7 5"/>
-    </g>
-    <text x="775" y="694" font-size="13" font-weight="700" fill="#1f2328">EventBridge Scheduler</text>
-    <text x="775" y="711" font-size="11.5" fill="#57606a">공공데이터 주기 동기화</text>
-    <text x="775" y="726" font-size="11.5" fill="#57606a">→ ECS RunTask (멱등 upsert)</text>
-  </g>
-
-  <!-- ══════════════ Left side (outside AWS) ══════════════ -->
-
-  <!-- GitHub Actions -->
-  <g>
-    <rect x="60" y="52" width="62" height="62" rx="12" fill="#2088ff"/>
-    <g stroke="#ffffff" stroke-width="2.4" fill="none">
-      <circle cx="83" cy="75" r="9"/>
-      <path d="M79.5 75 l2.5 2.7 4.5 -5"/>
-      <circle cx="104" cy="94" r="5"/>
-      <path d="M83 84 v6 a6 6 0 0 0 6 6 h10"/>
-    </g>
-    <text x="91" y="136" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2328">GitHub Actions</text>
-    <text x="91" y="153" text-anchor="middle" font-size="11.5" fill="#57606a">CI(Testcontainers) · gitleaks</text>
-  </g>
-  <!-- OIDC label on deploy arrow -->
-  <text x="290" y="66" text-anchor="middle" font-size="11.5" fill="#57606a">OIDC (키 없는 배포) · Docker 이미지 push</text>
-
-  <!-- Client -->
-  <g>
-    <g stroke="#1f2328" stroke-width="3" fill="none">
-      <rect x="62" y="372" width="76" height="46" rx="4"/>
-      <path d="M50 428 h100 l-8 12 h-84 z" fill="#1f2328"/>
-    </g>
-    <text x="100" y="464" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2328">Client</text>
-    <text x="100" y="481" text-anchor="middle" font-size="11.5" fill="#57606a">브라우저 · PWA(WebAPK)</text>
-  </g>
-
-  <!-- Vercel / Next.js BFF -->
-  <g>
-    <rect x="230" y="330" width="150" height="130" rx="10" fill="#ffffff" stroke="#1f2328" stroke-width="2"/>
-    <path d="M305 348 l17 29 h-34 z" fill="#1f2328"/>
-    <text x="305" y="402" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1f2328">Vercel</text>
-    <text x="305" y="420" text-anchor="middle" font-size="11.5" fill="#57606a">Next.js 16 BFF</text>
-    <text x="305" y="436" text-anchor="middle" font-size="11.5" fill="#57606a">동일 오리진 /api/* 프록시</text>
-  </g>
-
-  <!-- External APIs -->
-  <g>
-    <rect x="60" y="620" width="320" height="130" rx="10" fill="#fafbfc" stroke="#6e7781" stroke-width="1.6" stroke-dasharray="6 4"/>
-    <text x="80" y="648" font-size="12.5" font-weight="700" fill="#57606a">외부 API</text>
-    <text x="80" y="674" font-size="12" fill="#1f2328">Kakao — 지오코딩 · 도로 경로 · 로그인</text>
-    <text x="80" y="696" font-size="12" fill="#1f2328">기상청 — 초단기실황 날씨</text>
-    <text x="80" y="718" font-size="12" fill="#1f2328">LLM API — 장소 한 줄 요약</text>
-  </g>
-
-  <!-- ══════════════ Arrows ══════════════ -->
-  <g stroke="#1f2328" stroke-width="3" fill="none">
-    <!-- GitHub Actions -> ECR -->
-    <path d="M126 83 H752" marker-end="url(#arrow)"/>
-    <!-- ECR -> ECS -->
-    <path d="M796 108 C800 150, 806 170, 810 207" marker-end="url(#arrow)"/>
-    <!-- Client <-> Vercel -->
-    <path d="M144 395 H222" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <!-- Vercel <-> CloudFront -->
-    <path d="M384 395 H512" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <!-- CloudFront -> ALB -->
-    <path d="M588 428 C640 470, 655 505, 699 528" marker-end="url(#arrow)"/>
-    <!-- ALB <-> Spring Boot -->
-    <path d="M757 505 C780 470, 790 445, 802 432" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <!-- Spring Boot <-> RDS -->
-    <path d="M849 371 C930 330, 1050 290, 1152 268" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <!-- Spring Boot <-> Redis -->
-    <path d="M849 412 C930 450, 1050 495, 1160 518" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <!-- Spring Boot <-> S3 -->
-    <path d="M840 460 C920 560, 1060 650, 1162 690" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-    <!-- EventBridge -> ECS task -->
-    <path d="M718 664 C682 560, 682 360, 768 258" marker-end="url(#arrow)" stroke-dasharray="8 6"/>
-  </g>
-  <!-- Spring Boot -> External APIs (dotted, thinner) -->
-  <path d="M785 432 C700 540, 520 610, 388 660" fill="none" stroke="#6e7781" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#arrowDot)"/>
-
-  <!-- Terraform footnote -->
-  <g>
-    <rect x="500" y="792" width="26" height="26" rx="5" fill="#7b42bc"/>
-    <path d="M508 798 l7 4 v8 l-7 -4 z M517 803 l7 -4 v8 l-7 4 z" fill="#ffffff"/>
-    <text x="536" y="810" font-size="12.5" fill="#57606a">Terraform(IaC)이 VPC · ALB · ECS · RDS · ElastiCache · S3 · EventBridge · IAM(OIDC)을 프로비저닝 — 로컬 개발은 Docker Compose(PostGIS+Redis)</text>
-  </g>
+  <text x="40" y="615" class="small">AWS source: CloudFront → ALB → ECS Fargate 0.5 vCPU/1GB → RDS PostgreSQL 16 + ElastiCache Redis 7.1 + private S3. Data was verified before the AWS runtime was retired.</text>
 </svg>

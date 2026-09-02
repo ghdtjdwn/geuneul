@@ -2,7 +2,7 @@
 
 > 런타임 데이터 흐름 + 배포 파이프라인. 핵심(PostGIS 대용량 지리검색 · 실시간 UGC 시공간 스코어링)이 어디서 돌고, 요청이 브라우저에서 DB까지 어떻게 흐르는지 한 장으로.
 
-> 이전 상태(2026-09-01): 아래 AWS 다이어그램은 보존해야 할 source 구조다. AWS Free plan 종료로 backend는 중단됐고, Vercel frontend/BFF를 유지한 채 OCI ARM64 rootless Compose·Object Storage로 옮기는 중이다. target 구조와 zero-loss/cutover 게이트는 [ADR-0032](./adr/0032-oci-arm64-self-hosted-migration.md)와 [OCI 마이그레이션 런북](./OCI-MIGRATION.md)을 따른다. 라이브 컷오버 전에는 이 다이어그램을 OCI 운영 완료로 해석하지 않는다.
+> 운영 상태(2026-09-03): Vercel frontend/BFF는 유지하고 AWS ECS·RDS·ElastiCache·S3 백엔드와 운영 데이터를 OCI ARM64 rootless Compose·Object Storage로 이전했다. 출발·도착 사양과 zero-loss/cutover 검증은 [ADR-0032](./adr/0032-oci-arm64-self-hosted-migration.md)와 [OCI 마이그레이션 기록](./OCI-MIGRATION.md)에 있다.
 > 결정 근거는 각 노드의 ADR 링크 참고([색인](./adr/README.md)).
 
 ## 전체 구성
@@ -21,16 +21,15 @@ flowchart LR
     BFF["BFF — Next Route Handlers<br/>동일 오리진 /api/* 프록시<br/>(ADR-0004)"]
   end
 
-  subgraph aws["AWS"]
-    CF["CloudFront<br/>무료 HTTPS (ADR-0015)"]
-    ALB["ALB (http)"]
-    subgraph ecs["ECS Fargate"]
+  subgraph oci["OCI · Chuncheon"]
+    EDGE["기존 public edge · Caddy<br/>HTTPS SNI route"]
+    subgraph rootless["A1 ARM64 · rootless Compose · 0.75 CPU / 3GB"]
       API["Spring Boot 4 · Java 21<br/>반경 ST_DWithin · kNN &lt;-&gt; (GiST)<br/>survival_score (SQL 뷰 + 순수 함수)<br/>시나리오 추천 2단 랭킹<br/>멱등 ETL + 지오코딩"]
+      PG[("PostgreSQL 16 + PostGIS 3.6<br/>geometry(Point,4326)")]
+      REDIS[("Redis 7.4<br/>날씨 TTL · 조회 캐시<br/>공유 레이트리밋")]
     end
-    PG[("PostgreSQL + PostGIS<br/>RDS · geometry(Point,4326)")]
-    REDIS[("ElastiCache Redis<br/>날씨 TTL · 조회 캐시<br/>공유 레이트리밋")]
-    S3[("private S3<br/>conditional PUT · HeadObject<br/>일회성 claim · bounded cleanup")]
-    EB["EventBridge → ECS RunTask<br/>공공데이터 주기 동기화<br/>(ADR-0011)"]
+    OBJ[("private Object Storage<br/>S3 compatibility · conditional PUT<br/>versioned photos · verified backups")]
+    TIMER["systemd timers<br/>DB backup · production health"]
   end
 
   subgraph ext["외부 API"]
@@ -40,23 +39,24 @@ flowchart LR
   end
 
   UI -->|동일 오리진| BFF
-  BFF -->|HTTPS| CF --> ALB --> API
+  BFF -->|HTTPS| EDGE --> API
   API -->|Hibernate Spatial + JTS| PG
   API --> REDIS
-  API -->|SigV4 presign| S3
+  API -->|SigV4 presign| OBJ
   API -.지오코딩·경로.-> KAKAO
   API -.날씨.-> KMA
   API -.요약.-> AI
-  EB -.RunTask.-> API
+  TIMER -.backup·health.-> API
+  TIMER --> OBJ
   API -->|LISTEN NOTIFY → SSE| BFF
   API -->|Web Push| UI
 ```
 
-- **동일 오리진 BFF** — 브라우저는 항상 Vercel 위 `/api/*` 서버 프록시만 호출한다. ALB(http)·CORS 제약을 동시에 회피(백엔드 CORS 불필요, [ADR-0004](./adr/0004-frontend-same-origin-proxy.md)). 외부 키(Kakao/KMA/AI)도 서버에만 있다.
+- **동일 오리진 BFF** — 브라우저는 항상 Vercel 위 `/api/*` 서버 프록시만 호출한다. OCI origin과 server-only 설정을 브라우저 bundle에서 숨기고 OAuth·cookie 계약을 유지한다([ADR-0004](./adr/0004-frontend-same-origin-proxy.md)). 외부 키(Kakao/KMA/AI)도 서버에만 있다.
 - **공간 연산은 DB 레이어** — 반경(`ST_DWithin`)·최근접(kNN `<->`)·bounds는 GiST 인덱스로, 시공간 집계(`place_report_signals`)는 SQL 뷰로 돈다. 무거운 집계는 DB, 자주 튜닝하는 가중치 정책만 순수 Java 함수로 분리([ADR-0007](./adr/0007-survival-score-sql-signals-java-compose.md)).
 - **실시간** — 제보 INSERT → Postgres `LISTEN/NOTIFY` → 멀티 인스턴스 팬아웃 → SSE 스트림 / Web Push. 과설계(Kafka) 없이 이미 있는 Postgres·Redis로([ADR-0016](./adr/0016-realtime-report-surge-listen-notify-sse.md)).
-- **보안 경계** — BFF가 증명한 client identity로 Redis 레이트리밋을 인스턴스 간 공유한다. 사진은 presign 기록의
-  소유자·용도와 private S3 object 완료 상태를 검증한 일회성 claim만 UGC가 참조하며, 만료 미사용 object는 lease 기반
+- **보안 경계** — BFF가 증명한 client identity로 Redis 레이트리밋을 공유한다. 사진은 presign 기록의
+  소유자·용도와 private Object Storage object 완료 상태를 검증한 일회성 claim만 UGC가 참조하며, 만료 미사용 object는 lease 기반
   bounded job이 정리한다. JWT login/logout은 같은 user row lock으로 직렬화하고 DB `token_version`으로 즉시
   폐기할 수 있다([ADR-0031](./adr/0031-security-boundaries-session-upload-rate-limit.md)).
 
