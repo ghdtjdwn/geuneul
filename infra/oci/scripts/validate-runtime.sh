@@ -103,16 +103,10 @@ backup_secret_key="$(sed -n 's/^BACKUP_AWS_SECRET_ACCESS_KEY=//p' "$env_file" | 
 [[ "$app_access_key" != "$backup_access_key" && "$app_secret_key" != "$backup_secret_key" ]] \
   || fail "photo and backup Object Storage credentials must be distinct"
 
-if docker compose version >/dev/null 2>&1; then
-  compose=(docker compose)
-elif command -v docker-compose >/dev/null 2>&1; then
-  compose=(docker-compose)
-else
-  fail "Docker Compose v2 is unavailable"
-fi
+resolve_compose "$oci_dir" || fail "Docker Compose v2 is unavailable"
 
 APP_IMAGE_TAG="$app_tag" GEUNEUL_ENV_FILE="$env_file" \
-  "${compose[@]}" --project-directory "$oci_dir" \
+  "${COMPOSE[@]}" \
     --env-file "$env_file" --file "${oci_dir}/compose.production.yml" config --quiet
 
 printf 'OCI runtime configuration is valid.\n'

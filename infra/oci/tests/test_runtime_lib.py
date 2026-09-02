@@ -56,6 +56,47 @@ class RuntimeLibraryTest(unittest.TestCase):
             self.assertEqual("expected", result.stdout)
             self.assertEqual("", result.stderr)
 
+    def test_resolve_compose_leaves_an_inaccessible_invocation_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            blocked = root / "blocked"
+            project = root / "project"
+            binary_directory = root / "bin"
+            blocked.mkdir()
+            project.mkdir()
+            binary_directory.mkdir()
+            docker = binary_directory / "docker"
+            docker.write_text(
+                '#!/usr/bin/env bash\n[[ "$1 $2" == "compose version" ]]\n',
+                encoding="utf-8",
+            )
+            os.chmod(docker, 0o700)
+
+            try:
+                result = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        'cd "$2"; chmod 000 "$2"; source "$1"; resolve_compose "$3"; pwd -P',
+                        "runtime-test",
+                        str(RUNTIME_LIB),
+                        str(blocked),
+                        str(project),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env={
+                        **os.environ,
+                        "PATH": f"{binary_directory}:/usr/bin:/bin",
+                    },
+                )
+            finally:
+                os.chmod(blocked, 0o700)
+
+            self.assertEqual(str(project.resolve()), result.stdout.strip())
+            self.assertEqual("", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
