@@ -153,6 +153,7 @@ GET /alerts/stream            # text/event-stream (SSE)
 - 프로젝트 스펙(목표·범위·ERD·API): [`docs/SPEC.md`](./docs/SPEC.md)
 - 전체 기능·구현 방식·기술 스택: [`docs/FEATURES.md`](./docs/FEATURES.md)
 - 아키텍처·데모: [`docs/architecture.md`](./docs/architecture.md) · 의사결정 기록(ADR): [`docs/adr/`](./docs/adr) (0001–0031, [색인](./docs/adr/README.md))
+- 트러블슈팅: [브라우저 위치 좌표 지속 저장 제거](./docs/troubleshooting/location-storage-retention.md)
 - 배포(AWS): [`DEPLOY.md`](./DEPLOY.md)
 - 디자인·API 계약 레퍼런스: [`docs/design-brief.md`](./docs/design-brief.md) · 프론트엔드: [`frontend/README.md`](./frontend/README.md)
 
