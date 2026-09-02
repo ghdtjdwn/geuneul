@@ -7,6 +7,7 @@ readonly source_env="${1:-}"
 readonly target_env="${2:-}"
 readonly staging_root="${3:-}"
 readonly aws_cli_image="public.ecr.aws/aws-cli/aws-cli:2.31.30@sha256:6c9314d8dd18bcfd11c509e00ea39016c4fb978e42e86df1e4dfd17038b10b78"
+readonly source_excluded_prefix="migration/database/"
 
 source "${script_dir}/runtime-lib.sh"
 
@@ -58,7 +59,22 @@ aws_cli() {
 }
 
 aws_cli "$source_env" "$source_region" s3api list-objects-v2 --bucket "$source_bucket" \
-  --query 'Contents[].{Key:Key,Size:Size}' --output json >"${staging_root}/inventory/source-s3.json"
+  --query 'Contents[].{Key:Key,Size:Size}' --output json >"${staging_root}/inventory/source-all-s3.json"
+jq --arg prefix "$source_excluded_prefix" \
+  '[.[]? | select(.Key | startswith($prefix) | not)]' \
+  "${staging_root}/inventory/source-all-s3.json" >"${staging_root}/inventory/source-s3.json"
+excluded_source_count="$(
+  jq --arg prefix "$source_excluded_prefix" \
+    '[.[]? | select(.Key | startswith($prefix))] | length' \
+    "${staging_root}/inventory/source-all-s3.json"
+)"
+excluded_source_bytes="$(
+  jq --arg prefix "$source_excluded_prefix" \
+    '[.[]? | select(.Key | startswith($prefix)) | .Size] | add // 0' \
+    "${staging_root}/inventory/source-all-s3.json"
+)"
+[[ "$excluded_source_count" =~ ^[0-9]+$ && "$excluded_source_bytes" =~ ^[0-9]+$ ]] \
+  || fail "excluded source inventory is invalid"
 
 aws_cli "$target_env" "$target_region" --endpoint-url "$target_endpoint" s3api list-objects-v2 \
   --bucket "$target_bucket" --query 'Contents[].{Key:Key,Size:Size}' --output json \
@@ -79,14 +95,19 @@ jq -n \
   --arg target_bucket "$target_bucket" \
   --arg target_region "$target_region" \
   --arg target_endpoint "$target_endpoint" \
+  --arg source_excluded_prefix "$source_excluded_prefix" \
+  --argjson excluded_source_count "$excluded_source_count" \
+  --argjson excluded_source_bytes "$excluded_source_bytes" \
   --argjson target_initial_object_count "$target_before_count" \
-  '{source: {provider: $source_provider, bucket: $source_bucket, region: $source_region},
+  '{source: {provider: $source_provider, bucket: $source_bucket, region: $source_region,
+      excludedPrefix: $source_excluded_prefix, excludedObjectCount: $excluded_source_count,
+      excludedBytes: $excluded_source_bytes},
     target: {provider: $target_provider, namespace: $target_namespace, bucket: $target_bucket,
       region: $target_region, endpoint: $target_endpoint, initialObjectCount: $target_initial_object_count}}' \
   >"${staging_root}/inventory/migration-context.json"
 
 aws_cli "$source_env" "$source_region" s3 sync "s3://${source_bucket}" /work/source \
-  --no-follow-symlinks --only-show-errors
+  --exclude "${source_excluded_prefix}*" --no-follow-symlinks --only-show-errors
 python3 "${script_dir}/object-inventory.py" "${staging_root}/source" \
   "${staging_root}/inventory/source-local.json"
 

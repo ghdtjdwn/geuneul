@@ -12,9 +12,18 @@ from pathlib import Path
 OCI_DIR = Path(__file__).resolve().parents[1]
 OBJECT_INVENTORY = OCI_DIR / "scripts" / "object-inventory.py"
 VERIFY_MIGRATION = OCI_DIR / "scripts" / "verify-object-migration.py"
+MIGRATE_OBJECTS = OCI_DIR / "scripts" / "migrate-objects.sh"
 
 
 class ObjectMigrationTest(unittest.TestCase):
+    def test_database_export_prefix_is_excluded_from_photo_migration(self) -> None:
+        script = MIGRATE_OBJECTS.read_text(encoding="utf-8")
+
+        self.assertIn('source_excluded_prefix="migration/database/"', script)
+        self.assertIn('--exclude "${source_excluded_prefix}*"', script)
+        self.assertIn("excludedObjectCount", script)
+        self.assertIn("excludedBytes", script)
+
     def test_inventory_is_sorted_and_hashes_file_contents(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "objects"
