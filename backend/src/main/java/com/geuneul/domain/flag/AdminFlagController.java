@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 관리자 검수 큐 API (docs/SPEC.md §0-7, §9 GET /admin/flags/pending). ADMIN 전용 —
  * SecurityConfig의 {@code /admin/**}가 {@code hasRole("ADMIN")}으로 보호한다(비로그인 401, 비관리자 403).
- * resolve는 §9엔 없지만 "가벼우면 추가" 지시대로 최소 처리 엔드포인트만 얹었다(과설계 방지 — 장소 병합·
+ * resolve는 최소 처리 엔드포인트만 제공한다(과설계 방지 — 장소 병합·
  * 데이터 수동 보정 등 나머지 관리자 기능은 2차 스코프).
  */
 @Tag(name = "Admin", description = "신고 검수 큐 — ADMIN 전용")

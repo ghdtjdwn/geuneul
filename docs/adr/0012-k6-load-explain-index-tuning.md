@@ -21,7 +21,7 @@ GiST 인덱스를 타서 빠른가"를 부하로 증명한 적은 없었다.** P
 
 ## 실행 환경 — 정직한 한계 명시
 
-- 부하·EXPLAIN은 **로컬 docker-compose PostGIS 16-3.4**에만 걸었다(SPEC.md 지시 — 프로덕션 ALB 고부하 금지).
+- 부하·EXPLAIN은 **로컬 docker-compose PostGIS 16-3.4**에만 걸었다(SPEC.md 안전 제약 — 프로덕션 ALB 고부하 금지).
 - 데이터: 합성 시드(`perf/seed/seed_synthetic_places.sql`)로 **places 30만 + reports 21만**(유효 1만·만료 20만).
   분포는 실사용을 반영해 수도권 70% + 전국 30%. TOILET을 최다(30%)로 둬 프로덕션(공중화장실 46,897건 우세)을 근사.
 - 🔴 **에뮬레이션 한계:** 이 맥(arm64)의 colima는 2 vCPU고, `postgis/postgis:16-3.4`가 **amd64 이미지라 qemu로

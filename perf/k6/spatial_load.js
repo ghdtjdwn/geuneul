@@ -2,7 +2,7 @@
 //
 // 목적: "PostGIS 대용량 지리검색"(간판)이 GiST 인덱스로 실제로 빠른지 부하로 실증한다.
 // 로컬 docker-compose(PostGIS) + 합성 시드(perf/seed/seed_synthetic_places.sql, 30만 places)에만 건다.
-// 프로덕션 ALB 고부하 금지(docs/SPEC.md 지시) — BASE_URL 기본값은 로컬.
+// 프로덕션 ALB에는 부하를 걸지 않는 안전 제약(docs/SPEC.md) — BASE_URL 기본값은 로컬.
 //
 // 실행:
 //   docker compose up -d && (백엔드) ./gradlew bootRun
