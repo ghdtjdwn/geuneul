@@ -45,7 +45,9 @@ class ProductionExportScriptTest(unittest.TestCase):
         self.assertRegex(script, r"aws-cli:2\.31\.30@sha256:[0-9a-f]{64}")
         self.assertIn('desiredCount\' "$service_json")" == "0"', script)
         self.assertIn('condition:"SUCCESS"', script)
-        self.assertIn("sha256sum /export/geuneul.dump", script)
+        self.assertIn("cd /export && sha256sum geuneul.dump", script)
+        self.assertIn('--field-separator="$(printf "\\t")"', script)
+        self.assertNotIn('--field-separator="\\t"', script)
         self.assertIn("shasum -a 256 --check geuneul.dump.sha256", script)
         self.assertIn("pg_restore --list", script)
 

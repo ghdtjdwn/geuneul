@@ -91,8 +91,8 @@ readonly prefix="migration/database/${timestamp}"
 readonly exporter_script='pg_dump --host="$DB_HOST" --port=5432 --username="$DB_USERNAME" --dbname="$DB_NAME" --format=custom --compress=9 --no-owner --no-acl --file=/export/geuneul.dump
 test -s /export/geuneul.dump
 pg_restore --list /export/geuneul.dump >/dev/null
-sha256sum /export/geuneul.dump >/export/geuneul.dump.sha256
-psql --host="$DB_HOST" --port=5432 --username="$DB_USERNAME" --dbname="$DB_NAME" --no-align --tuples-only --field-separator="\t" --set ON_ERROR_STOP=1 > /export/source.table-counts.tsv <<'"'"'SQL'"'"'
+(cd /export && sha256sum geuneul.dump >geuneul.dump.sha256)
+psql --host="$DB_HOST" --port=5432 --username="$DB_USERNAME" --dbname="$DB_NAME" --no-align --tuples-only --field-separator="$(printf "\t")" --set ON_ERROR_STOP=1 > /export/source.table-counts.tsv <<'"'"'SQL'"'"'
 SELECT format(
   '"'"'SELECT %L AS table_name, count(*) AS row_count FROM %I.%I;'"'"',
   table_name, table_schema, table_name
