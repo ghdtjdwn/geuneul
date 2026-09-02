@@ -15,8 +15,17 @@ AWS Free plan 종료로 ECS·RDS·ElastiCache·S3 기반 백엔드가 중단됐�
 - OCI A1은 ARM64다. `postgis/postgis` 공식 이미지는 2026-09 현재 amd64만 지원한다.
 - 사진 DB 열에는 AWS S3 raw URL이 저장돼 있다. 일괄 UPDATE는 롤백 범위와 데이터 변경 위험을 키운다.
 - AWS 원본은 OCI 복원과 무결성 검증이 끝날 때까지 삭제할 수 없다.
+- 정상 운영의 AWS·OCI 인프라 비용은 0원이어야 한다. AWS paid plan은 정지된 원본을 반출하는 짧은 복구 구간에만 허용하고, OCI도 Always Free 실측 한도를 넘기면 컷오버하지 않는다.
 
 ## 결정
+
+### 0. 무손실 이전과 상시 0원 운영을 별도 게이트로 보장한다
+
+AWS Free plan이 끝난 계정은 paid plan으로 재개해야 보존된 RDS·S3 원본을 내려받을 수 있다. 이 전환은 AWS를 계속 운영하기 위한 것이 아니라 final dump·snapshot·object manifest를 확보하기 위한 일회성 data rescue다. 반출과 OCI 검증이 끝나면 AWS 비용 리소스를 즉시 정리하고 account를 다시 닫는다.
+
+OCI의 현재 Always Free 한도는 A1 2 OCPU/12GB, home region의 boot+block volume 합계 200GB, Object Storage 합계 20GB다. live metadata에서 compute는 정확히 2 OCPU/12GB지만 attached disk는 boot 200GB와 data 50GB로 합계 250GB다. root filesystem은 약 145GiB가 비어 있고 data volume 실제 사용량은 약 2GiB이므로, Geuneul을 activate하기 전에 기존 data를 boot volume으로 two-pass copy하고 checksum·서비스 read-back을 통과한 뒤 50GB volume을 분리해야 한다. 분리한 volume 삭제는 rollback 관찰 뒤 별도 파괴 승인으로 실행한다. 이 정리가 끝나 실제 boot+block 합계가 200GB 이하가 되기 전에는 Geuneul 운영 배포를 시작하지 않는다.
+
+photos, version history와 database backup lifecycle의 합계도 20GB를 넘을 수 없다. AWS source object 총량과 초기 dump·14일 보존 예상량을 계산해 20GB 미만임을 증명하고, OCI Cost Analysis에서 billable resource가 없음을 확인한다. 둘 중 하나라도 실패하면 retention을 몰래 줄이거나 유료 사용을 허용하지 않고 컷오버를 중단해 용량 결정을 다시 받는다.
 
 ### 1. 프론트와 백엔드는 기존처럼 분리한다
 
@@ -74,7 +83,7 @@ GitHub Actions는 QEMU/buildx로 backend와 PostGIS의 ARM64 image archive를 �
 
 ## 결과와 위험
 
-- AWS 서비스 비용을 OCI 기존 용량과 Object Storage 사용량 중심으로 줄인다.
+- AWS paid plan은 원본 반출 구간에만 사용하고, 정상 운영의 AWS·OCI 인프라 비용을 0원으로 만든다.
 - frontend/BFF 계약을 유지해 컷오버가 환경변수 한 개로 제한된다.
 - AWS OIDC/ECR/ECS 자동 배포를 수동 승인 OCI ARM64 release pipeline으로 교체해, 중단된 AWS로의 오배포를 막고 initial data restore와 app activation을 분리한다.
 - 자체 DB 운영 책임(패치, 백업, 복구, 용량, 장애 대응)을 직접 진다.
@@ -82,6 +91,7 @@ GitHub Actions는 QEMU/buildx로 backend와 PostGIS의 ARM64 image archive를 �
 - 라이브 사전 점검에서 기존 k3s CPU request가 1,920m/2,000m(96%)이고 `Insufficient cpu` Pending Pod 2개가 이미 있었다. Geuneul의 별도 cgroup은 Kubernetes 예약량에는 들어가지 않으므로 배치 자체는 가능하지만, 0.75 CPU 상한·점진 기동·기존 Pod 상태 비교를 컷오버 게이트로 둔다. Pending 수 증가나 host memory 1GiB 미만이면 중단한다.
 - OCI S3 compatibility의 실제 presigned conditional PUT, Caddy preflight/Host 전달, 중복 PUT 412는 라이브 버킷에서 마지막 계약 테스트를 통과해야 컷오버할 수 있다.
 - rootless bootstrap과 restricted release gateway는 로컬 정적·archive 보안 테스트를 통과했지만, 실제 OCI user cgroup·volume ACL·SSH forced command는 production 적용 전 plan과 적용 후 read-back이 필요하다.
+- live A1 compute는 Always Free 크기와 일치하지만 현재 attached volume 합계 250GB가 200GB 무료 한도를 넘는다. 기존 workload를 보존하는 data-volume→boot migration, 실제 Cost Analysis 0원, Object Storage 20GB 예산을 먼저 검증해야 한다.
 - AWS 원본은 OCI 검증·Vercel 종단 테스트·안정화 구간이 끝난 뒤에만 비용 리소스를 정리한다.
 
 ## 검증 근거
@@ -89,4 +99,4 @@ GitHub Actions는 QEMU/buildx로 backend와 PostGIS의 ARM64 image archive를 �
 - native arm64 custom image에서 PostGIS 3.6.4, `geuneul_app.rolsuper=false`, geometry SRID 4326 확인
 - 전체 Compose에서 PostgreSQL·Redis·Spring Boot health와 Flyway V21 적용 확인
 - custom dump를 별도 빈 volume에 single-transaction으로 복원한 뒤 전 테이블 행 수, Flyway, 185개 제약, 59개 public index, SRID 4326 일치 확인
-- 공식 근거: [PostGIS Docker image 지원 아키텍처와 Dockerfile](https://github.com/postgis/docker-postgis), [OCI S3 Compatibility API](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm), [OCI Block Volume backups](https://docs.oracle.com/en-us/iaas/Content/Block/Concepts/blockvolumebackups.htm)
+- 공식 근거: [PostGIS Docker image 지원 아키텍처와 Dockerfile](https://github.com/postgis/docker-postgis), [OCI Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm), [OCI S3 Compatibility API](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm), [OCI Block Volume backups](https://docs.oracle.com/en-us/iaas/Content/Block/Concepts/blockvolumebackups.htm), [AWS Free plan FAQ](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-FAQ.html)

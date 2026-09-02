@@ -6,9 +6,9 @@
 
 - 완료: OCI S3 호환 코드, native ARM64 PostGIS 이미지, 제한된 Compose, Object Storage Terraform, DB backup/restore/verify, S3 왕복 SHA-256 검증 스크립트, 제한된 SSH release gateway와 수동 stage/deploy workflow
 - 로컬 실증: ARM64 전체 스택 health, Flyway V21, 분리된 빈 DB 복원과 전 테이블 행 수·제약·인덱스·SRID 검증
-- 라이브 확인: OCI A1 2 OCPU/12GB·Ubuntu 22.04 ARM64, boot 200GB, 별도 data volume 50GB 중 약 47GB 여유, 기존 NLB 80/443와 backend health 정상, Object Storage bucket 0개, 계획 포트 13880 미사용
+- 라이브 확인: OCI A1 2 OCPU/12GB·Ubuntu 22.04 ARM64, boot 200GB + 별도 data volume 50GB, 기존 NLB 80/443와 backend health 정상, Object Storage bucket 0개, 계획 포트 13880 미사용. attached volume 합계 250GB는 Always Free boot+block 합계 200GB보다 50GB 크므로 현재 배치를 그대로 무료라고 가정하지 않는다.
 - 용량 경계: 기존 k3s CPU request 1,920m/2,000m(96%)와 Pending Pod 2개가 이미 존재한다. Geuneul은 k3s 밖의 별도 rootless cgroup 0.75 CPU·3GB로 격리하지만 실제 host CPU contention은 안정화 관찰 대상이다.
-- 대기: AWS paid account 재개 승인, AWS 원본 inventory/export, OCI live bucket·Customer Secret Key, server bootstrap 실제 적용, Caddy route, Vercel cutover
+- 대기: 일회성 AWS paid data rescue 승인, AWS 원본 inventory/export, OCI 50GB data volume 무손실 재배치와 Cost Analysis 0원 확인, live bucket·Customer Secret Key, server bootstrap 실제 적용, Caddy route, Vercel cutover
 
 ## 불변 조건
 
@@ -18,10 +18,19 @@
 4. source/target table counts와 object key·size·SHA-256이 모두 일치하기 전에는 Vercel을 바꾸지 않는다.
 5. Vercel 사용자 흐름과 rollback을 확인하기 전에는 AWS 원본·snapshot·S3 object를 삭제하지 않는다.
 6. 모든 production 변경은 적용 직전 plan 또는 exact target을 다시 확인하고, 값이 있는 로그를 남기지 않는다.
+7. 정상 운영은 AWS·OCI 인프라 비용 0원이다. OCI boot+block 합계 200GB와 Object Storage 합계 20GB를 넘거나 Cost Analysis에 billable usage가 있으면 activate하지 않는다.
+
+## 0. OCI 0원 운영 선행 조건
+
+1. live instance metadata에서 `VM.Standard.A1.Flex`, 2 OCPU, 12GB와 실행 region을 확인한다. tenancy의 home region·Limits, Quotas and Usage·Cost Analysis를 함께 읽어 기존 Chuncheon instance가 실제 Always Free entitlement를 쓰고 있고 billable usage가 없는지 확인한다.
+2. 현재 root 200GB는 약 145GiB free이고 `/opt/marketvalley` 50GB volume은 약 2GiB만 사용한다. 기존 workload별 owner와 service를 식별한 뒤 first rsync, 정확한 서비스 stop, final rsync, file count·size·checksum, `/etc/fstab` 변경, 재기동·health 순으로 boot volume으로 옮긴다. 기존 volume은 rollback 관찰 동안 detach만 하고, 별도 파괴 승인 뒤 삭제한다.
+3. 삭제 read-back에서 boot+block 합계가 200GB 이하이고 기존 NLB·k3s·MarketValley health가 이전 기준선과 같아야 Geuneul bootstrap으로 넘어간다.
+4. AWS source photos 총량, OCI versioning 증가분, initial DB dump와 14일 backup 보존량의 합계가 Object Storage 20GB 미만인지 계산한다. 초과하거나 증명할 수 없으면 컷오버를 중단한다.
+5. 새 compute, load balancer, 유료 database나 추가 block volume은 만들지 않는다. IAM, private bucket과 기존 NLB/Caddy만 재사용한다.
 
 ## 1. AWS 계정 복구와 동결
 
-1. Billing 화면에서 paid plan 전환 비용을 승인받고 계정을 재개한다. 2026-09-01 확인 시 account는 suspended/closed 상태이고 미결제 잔액은 0원이므로, 결제 체납 처리보다 plan 재활성화 경로를 따른다.
+1. Billing 화면에서 일회성 data rescue 비용을 승인받고 paid plan으로 계정을 재개한다. AWS 공식 정책상 Free plan 종료 뒤 보존 데이터를 내려받으려면 paid plan 전환이 필요하다. 이는 상시 운영 전환이 아니며 반출·OCI 검증 직후 비용 리소스 정리와 account 재폐쇄까지 한 작업 단위로 추적한다. 2026-09-01 확인 시 account는 suspended/closed 상태이고 미결제 잔액은 0원이었다.
 2. RDS, ECS service/task, S3, ECR, SSM, CloudFront, ALB, ElastiCache, EventBridge inventory를 timestamp와 함께 `.local/oci-migration/aws-inventory/`에 저장한다.
 3. 기존 health와 RDS 상태를 읽기 전용으로 확인한다.
 4. ECS desired count와 scheduled ingestion을 0/disabled로 바꿔 쓰기를 동결한다. 프론트 BFF가 실패하는 현재 상태를 더 악화시키지 않도록 상태 코드를 기록한다.
