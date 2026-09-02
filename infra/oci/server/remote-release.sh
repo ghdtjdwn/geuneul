@@ -63,8 +63,14 @@ require_runtime() {
     || fail "deploy user memory limit must be 3 GiB"
   [[ "$(tr -d '[:space:]' <"${user_cgroup}/memory.swap.max")" == "0" ]] \
     || fail "deploy user swap must be disabled"
-  [[ "$(findmnt -n -o TARGET --target /opt/marketvalley)" == "/opt/marketvalley" ]] \
-    || fail "the dedicated data volume is not mounted"
+  [[ -f /usr/local/lib/geuneul/verify-host-storage.sh \
+    && ! -L /usr/local/lib/geuneul/verify-host-storage.sh ]] \
+    || fail "trusted host storage verifier is unavailable"
+  [[ "$(stat -c '%u:%g:%a' /usr/local/lib/geuneul/verify-host-storage.sh)" == "0:0:644" ]] \
+    || fail "trusted host storage verifier must be root-owned mode 0644"
+  # shellcheck disable=SC1091
+  . /usr/local/lib/geuneul/verify-host-storage.sh
+  geuneul_verify_host_storage
   [[ "$(docker info --format '{{.DockerRootDir}}')" == "${deploy_root}/docker" ]] \
     || fail "Docker data-root is outside the Geuneul directory"
   [[ -f "$production_environment" && ! -L "$production_environment" ]] \
@@ -87,9 +93,13 @@ require_free_space_kib() {
   local minimum_kib="$1"
   local operation="$2"
   local available_kib=""
-  available_kib="$(df -Pk "$deploy_root" | awk 'NR == 2 { print $4 }')"
+  geuneul_require_host_capacity
+  if (( minimum_kib < GEUNEUL_HOST_MINIMUM_FREE_KIB )); then
+    minimum_kib="${GEUNEUL_HOST_MINIMUM_FREE_KIB}"
+  fi
+  available_kib="$(df -Pk / | awk 'NR == 2 { print $4 }')"
   [[ "$available_kib" =~ ^[0-9]+$ && "$available_kib" -ge "$minimum_kib" ]] \
-    || fail "$operation requires at least $((minimum_kib / 1024 / 1024)) GiB free on the shared block volume"
+    || fail "$operation requires at least $((minimum_kib / 1024 / 1024)) GiB free on the shared boot filesystem"
 }
 
 manifest_value() {
@@ -263,8 +273,13 @@ start_data_services() {
 
 activate_release() {
   local release_sha="$1"
+  local enforce_capacity="${2:-yes}"
   local previous_sha=""
-  require_free_space_kib $((8 * 1024 * 1024)) "release activation"
+  if [[ "${enforce_capacity}" == "yes" ]]; then
+    require_free_space_kib $((8 * 1024 * 1024)) "release activation"
+  elif [[ "${enforce_capacity}" != "no" ]]; then
+    fail "activation capacity mode is invalid"
+  fi
   validate_release "$release_sha"
   load_release_images "$release_sha"
   GEUNEUL_RELEASE_SHA="$release_sha" \
@@ -293,8 +308,8 @@ stage_release() {
   [[ -f "$archive_path" && ! -L "$archive_path" ]] || fail "release archive is missing or unsafe"
   printf '%s  %s\n' "$archive_digest" "$archive_path" | sha256sum --check --status \
     || fail "release archive checksum failed"
-  prune_old_releases "$release_sha" "$(read_current_release)"
   require_free_space_kib $((12 * 1024 * 1024)) "release staging"
+  prune_old_releases "$release_sha" "$(read_current_release)"
   extract_release "$release_sha" "$archive_digest"
   load_release_images "$release_sha"
   printf 'geuneul release %s is staged.\n' "$release_sha"
@@ -349,7 +364,7 @@ case "$operation" in
     target_sha="${GEUNEUL_RELEASE_SHA}"
     previous_sha="$(read_current_release)"
     if ! activate_release "$target_sha"; then
-      if is_release_sha "$previous_sha" && activate_release "$previous_sha"; then
+      if is_release_sha "$previous_sha" && activate_release "$previous_sha" no; then
         printf 'Activation failed; automatic rollback restored %s.\n' "$previous_sha" >&2
       fi
       fail "release activation failed"
@@ -367,7 +382,7 @@ case "$operation" in
     target_sha="${GEUNEUL_TARGET_SHA:-}"
     is_release_sha "$target_sha" || fail "rollback SHA is invalid"
     current_sha="$(read_current_release)"
-    activate_release "$target_sha" || fail "rollback release did not become healthy"
+    activate_release "$target_sha" no || fail "rollback release did not become healthy"
     if is_release_sha "$current_sha"; then write_previous_release "$current_sha"; fi
     printf 'geuneul rollback restored %s.\n' "$target_sha"
     ;;

@@ -35,10 +35,11 @@ trap cleanup EXIT
   || fail "this pinned bootstrap supports Ubuntu 22.04 only"
 [[ "$(dpkg --print-architecture)" == "arm64" ]] \
   || fail "this pinned bootstrap supports the OCI Ampere A1 arm64 host only"
-[[ "$(findmnt -n -o FSTYPE --target "$data_mount")" == "ext4" ]] \
-  || fail "$data_mount must be the existing dedicated ext4 volume"
-[[ "$(findmnt -n -o TARGET --target "$data_mount")" == "$data_mount" ]] \
-  || fail "$data_mount must be a mount point"
+script_directory="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+. "${script_directory}/verify-host-storage.sh"
+geuneul_verify_host_storage
+geuneul_require_host_capacity
 
 deploy_user="${GEUNEUL_DEPLOY_USER:-geuneul}"
 public_key_file="${GEUNEUL_DEPLOY_PUBLIC_KEY_FILE:-}"
@@ -109,11 +110,11 @@ awk -F: -v user="$deploy_user" '$1 == user && $3 >= 65536 { found = 1 } END { ex
 awk -F: -v user="$deploy_user" '$1 == user && $3 >= 65536 { found = 1 } END { exit !found }' /etc/subgid \
   || fail "deploy user needs at least 65536 subordinate GIDs"
 
-# The existing volume root stays owned by the other workload. Grant only path
+# The verified shared storage root stays owned by the other workload. Grant only path
 # traversal to the dedicated Geuneul user; no directory listing or file access.
 setfacl -m "u:${deploy_user}:--x" "$data_mount"
 getfacl --absolute-names --omit-header "$data_mount" | grep -Fqx "user:${deploy_user}:--x" \
-  || fail "the Geuneul user cannot traverse the shared volume root"
+  || fail "the Geuneul user cannot traverse the shared storage root"
 install -d -m 0750 -o "$deploy_user" -g "$deploy_user" "$deploy_root" "${deploy_root}/docker"
 docker_config_directory="${deploy_home}/.config/docker"
 docker_daemon_config="${docker_config_directory}/daemon.json"
@@ -190,17 +191,24 @@ run_as_deploy() {
 }
 
 run_as_deploy dockerd-rootless-setuptool.sh install --force
+install -d -m 0755 /usr/local/lib/geuneul
+install -m 0644 -o root -g root "${script_directory}/verify-host-storage.sh" \
+  /usr/local/lib/geuneul/verify-host-storage.sh
+install -m 0755 -o root -g root "${script_directory}/verify-storage-start.sh" \
+  /usr/local/lib/geuneul/verify-storage-start.sh
 install -d -m 0755 -o "$deploy_user" -g "$deploy_user" "${deploy_home}/.config/systemd/user/docker.service.d"
-printf '%s\n' '[Unit]' 'ConditionPathIsMountPoint=/opt/marketvalley' \
+printf '%s\n' \
+  '[Unit]' \
+  'ConditionPathIsMountPoint=/opt/marketvalley' \
+  '[Service]' \
+  'ExecStartPre=/usr/local/lib/geuneul/verify-storage-start.sh' \
   >"${deploy_home}/.config/systemd/user/docker.service.d/geuneul-data.conf"
 chown "$deploy_user:$deploy_user" "${deploy_home}/.config/systemd/user/docker.service.d/geuneul-data.conf"
 run_as_deploy systemctl --user daemon-reload
 run_as_deploy systemctl --user enable --now docker.service
 [[ "$(run_as_deploy docker info --format '{{.DockerRootDir}}')" == "${deploy_root}/docker" ]] \
-  || fail "rootless Docker data-root is outside the dedicated volume"
+  || fail "rootless Docker data-root is outside the verified shared storage"
 
-script_directory="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-install -d -m 0755 /usr/local/lib/geuneul
 for script in check-production-health.sh deploy-gateway.sh release-manager.sh remote-release.sh validate-release-archive.py; do
   install -m 0755 -o root -g root "${script_directory}/${script}" "/usr/local/lib/geuneul/${script}"
 done

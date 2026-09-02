@@ -5,7 +5,6 @@ readonly deploy_root="/opt/marketvalley/geuneul"
 readonly current_link="${deploy_root}/current"
 readonly environment_file="${deploy_root}/shared/production.env"
 readonly backup_status="${deploy_root}/backups/last-success"
-readonly minimum_free_kib=$((8 * 1024 * 1024))
 
 fail() {
   printf 'geuneul production health failed: %s\n' "$1" >&2
@@ -13,15 +12,22 @@ fail() {
 }
 
 [[ "$(id -u)" != "0" ]] || fail "health check must run as the rootless deploy user"
+[[ -f /usr/local/lib/geuneul/verify-host-storage.sh \
+  && ! -L /usr/local/lib/geuneul/verify-host-storage.sh ]] \
+  || fail "trusted host storage verifier is unavailable"
+[[ "$(stat -c '%u:%g:%a' /usr/local/lib/geuneul/verify-host-storage.sh)" == "0:0:644" ]] \
+  || fail "trusted host storage verifier must be root-owned mode 0644"
+# shellcheck disable=SC1091
+. /usr/local/lib/geuneul/verify-host-storage.sh
+geuneul_verify_host_storage
+geuneul_require_host_capacity
 [[ -L "$current_link" ]] || fail "no active release exists"
 release_sha="$(readlink "$current_link")"
 release_sha="${release_sha##*/}"
 [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]] || fail "active release SHA is invalid"
 [[ -f "$environment_file" && ! -L "$environment_file" ]] || fail "production.env is unavailable"
 
-available_kib="$(df -Pk "$deploy_root" | awk 'NR == 2 { print $4 }')"
-[[ "$available_kib" =~ ^[0-9]+$ && "$available_kib" -ge "$minimum_free_kib" ]] \
-  || fail "shared block volume has less than 8 GiB free"
+available_kib="$(df -Pk / | awk 'NR == 2 { print $4 }')"
 
 systemctl --user is-enabled geuneul-backup.timer >/dev/null \
   || fail "daily backup timer is not enabled"

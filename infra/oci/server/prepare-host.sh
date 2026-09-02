@@ -22,10 +22,16 @@ deploy_root="/opt/marketvalley/geuneul"
 
 [[ "$deploy_uid" != "0" ]] || fail "deploy user must not be root"
 [[ -d "$deploy_home" && ! -L "$deploy_home" ]] || fail "deploy user home is missing or unsafe"
-[[ "$(findmnt -n -o FSTYPE --target /opt/marketvalley)" == "ext4" ]] \
-  || fail "/opt/marketvalley must be the dedicated ext4 volume"
-[[ "$(findmnt -n -o TARGET --target /opt/marketvalley)" == "/opt/marketvalley" ]] \
-  || fail "/opt/marketvalley is not a mount point"
+script_directory="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+storage_library="/usr/local/lib/geuneul/verify-host-storage.sh"
+[[ -r "${storage_library}" ]] || storage_library="${script_directory}/verify-host-storage.sh"
+[[ -f "${storage_library}" && ! -L "${storage_library}" ]] || fail "trusted host storage verifier is unavailable"
+[[ "$(stat -c '%u:%g:%a' "${storage_library}")" == "0:0:644" ]] \
+  || fail "trusted host storage verifier must be root-owned mode 0644"
+# shellcheck disable=SC1090
+. "${storage_library}"
+geuneul_verify_host_storage
+geuneul_require_host_capacity
 [[ -S "$rootless_socket" ]] || fail "rootless Docker socket is unavailable"
 [[ "$(stat -c '%u' "$rootless_socket")" == "$deploy_uid" ]] \
   || fail "rootless Docker socket is not owned by the deploy user"
@@ -58,7 +64,6 @@ run_as_deploy systemctl --user is-active docker.service >/dev/null \
 [[ "$(run_as_deploy docker info --format '{{.DockerRootDir}}')" == "${deploy_root}/docker" ]] \
   || fail "rootless Docker data-root is outside the Geuneul directory"
 
-script_directory="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 template_path="${script_directory}/../production.env.example"
 environment_path="${deploy_root}/shared/production.env"
 [[ -f "$template_path" ]] || fail "production.env.example is missing"

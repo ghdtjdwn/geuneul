@@ -59,7 +59,7 @@ AWS 쓰기를 먼저 멈춘 뒤 PostgreSQL 16 client로 `pg_dump --format=custom
 
 복원 뒤에는 테이블별 행 수, Flyway 최신 성공, 제약·인덱스 수, PostGIS extension과 장소 SRID 4326을 검증한다. 사진은 AWS→로컬→OCI→별도 검증 다운로드 순서로 이동하며 key·size·각 파일 SHA-256이 모두 같아야 성공으로 판정한다. 어떤 스크립트도 AWS 원본을 삭제하지 않는다.
 
-운영 백업은 매일 custom dump·checksum·행 수를 별도 private Object Storage bucket에 올리고 14일 보존한다. 기존 OCI Block Volume backup과 함께 논리/블록 두 계층을 유지한다.
+운영 백업은 매일 custom dump·checksum·행 수를 별도 private Object Storage bucket에 올리고 14일 보존한다. Object Storage의 photos·version history·database backup 합계가 Always Free 20GB를 넘으면 backup 또는 activate를 중단한다. 이전 Block Volume과 그 backup은 zero-cost audit과 별도 파괴 승인 전까지만 rollback 자산으로 보존하고 장기 백업 계층으로 가정하지 않는다.
 
 ### 6. 빌드는 GitHub에서, 운영 실행은 제한된 rootless 계정에서 한다
 
@@ -67,7 +67,7 @@ GitHub Actions는 QEMU/buildx로 backend와 PostGIS의 ARM64 image archive를 �
 
 첫 이전은 `stage`로 image를 적재하고 `start-data`로 PostgreSQL·Redis만 `--no-build` 기동해 애플리케이션과 데이터 복원을 분리한다. DB·객체 무결성 검증 뒤 같은 Git SHA를 `activate`한다. 이후 일반 배포는 `deploy`가 health 확인과 이전 release 자동 복귀까지 수행한다. 전용 rootless 사용자는 전체 0.75 CPU·3GiB·swap 0으로 제한하고, 기존 block volume root에는 해당 사용자만 통과할 수 있는 execute-only ACL을 둔다.
 
-공유 block volume의 다른 workload를 보호하기 위해 stage 12GiB, data start 10GiB, activate/상시 health 8GiB의 free-space fail-closed gate를 둔다. release archive와 image는 active·rollback·최근 5개만 유지한다. rootless systemd timer가 매일 logical backup을 실행하며 자체 flock, DB 크기 기반 여유 공간 검사, 별도 non-delete credential, off-host HEAD size, 성공 marker를 사용한다. 별도 15분 health timer가 app image/health, disk, timer와 36시간 backup freshness를 journal failure로 노출한다.
+K3s·MarketValley·Geuneul이 같은 200GB boot filesystem을 공유하므로 bootstrap, stage, data start, activate와 상시 health는 모두 boot free 40GiB 이상·inode 사용률 90% 이하를 fail-closed 강제한다. 저장소 구조 검증과 capacity 검증은 분리해 디스크 압박 중에도 기존 release rollback은 가능하게 한다. release archive와 image는 active·rollback·최근 5개만 유지한다. rootless systemd timer가 매일 logical backup을 실행하며 자체 flock, DB 크기 기반 여유 공간 검사, 별도 non-delete credential, off-host HEAD size, 성공 marker를 사용한다. 별도 15분 health timer가 app image/health, host disk·inode, timer와 36시간 backup freshness를 journal failure로 노출한다.
 
 ## 검토한 대안
 

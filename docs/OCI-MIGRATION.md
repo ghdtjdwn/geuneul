@@ -66,7 +66,7 @@ OBJECT_MIGRATION_CONFIRM=MIGRATE_GEUNEUL_OBJECTS \
 8. GitHub production environment에 `OCI_DEPLOY_HOST`, `OCI_DEPLOY_USER`, `OCI_DEPLOY_SSH_PRIVATE_KEY`, pin된 `OCI_DEPLOY_HOST_KEY`를 등록한다. 첫 workflow dispatch는 반드시 `stage`로 실행한다. workflow는 ARM64 image archive를 checksum 검증해 적재한 뒤 restricted `start-data`로 PostgreSQL·Redis만 `--no-build` 기동하며 app은 시작하지 않는다.
 9. `/opt/marketvalley/geuneul/releases/<full-git-sha>/infra/oci/compose.production.yml`을 source of truth로 아래 절차에서 DB를 복원한다. 검증이 끝난 뒤 restricted gateway의 `activate <full-git-sha>`로 같은 release를 시작한다. 이후 배포는 workflow의 `deploy`가 stage·health·자동 복귀를 수행한다.
 10. Caddy에 새 HTTPS hostname과 VM private high-port upstream을 추가하고 Caddy validate 후 reload한다.
-11. bootstrap 전후 `/opt/marketvalley`의 실제 free space를 기록한다. stage는 12GiB, data start는 10GiB, activate와 상시 health는 8GiB 미만이면 실패해야 한다. 이 gate를 낮추지 않는다.
+11. bootstrap 전후 boot filesystem의 실제 free space와 inode 사용률을 기록한다. bootstrap, stage, data start, activate와 상시 health는 40GiB 미만 또는 inode 90% 초과면 실패해야 한다. 구조 검사와 capacity 검사를 분리해 저용량 상태에서도 기존 release rollback은 막지 않는다. 이 gate를 낮추지 않는다.
 12. 기존 k3s의 CPU request·Pending Pod와 host `MemAvailable`을 다시 기록한다. Geuneul 기동 뒤 기존 workload의 Pending/Unknown 수가 증가하거나 memory available이 1GiB 아래로 내려가면 activate를 중단하고 Geuneul을 정지한다.
 
 ## 4. DB 복원과 병렬 검증
@@ -129,4 +129,4 @@ systemctl --user status geuneul-backup.service geuneul-health.service
 journalctl --user -u geuneul-backup.service -u geuneul-health.service --since '48 hours ago'
 ```
 
-health timer는 8GiB free-space, active Git SHA/image, app health, backup timer, 36시간 이내 verified backup marker를 확인한다. Object Storage lifecycle은 remote 14일, 서버 로컬 산출물은 성공한 off-host upload 뒤 기본 3일 보존한다.
+health timer는 boot free 40GiB·inode 90% 이하, active Git SHA/image, app health, backup timer, 36시간 이내 verified backup marker를 확인한다. Object Storage lifecycle은 remote 14일, 서버 로컬 산출물은 성공한 off-host upload 뒤 기본 3일 보존하며 photos·versions·backup 합계 20GB를 넘기지 않는다.
