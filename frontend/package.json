@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "verify:location-privacy": "node scripts/verify-location-privacy.mjs",
     "audit:dependencies": "node scripts/verify-dependency-security.mjs && pnpm audit --audit-level low"
   },
   "dependencies": {

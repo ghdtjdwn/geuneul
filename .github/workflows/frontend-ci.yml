@@ -47,6 +47,9 @@ jobs:
       - name: Dependency audit
         run: pnpm audit:dependencies
 
+      - name: Location privacy contract
+        run: pnpm verify:location-privacy
+
       - name: Typecheck
         run: pnpm typecheck
 
