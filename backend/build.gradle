@@ -47,8 +47,8 @@ dependencies {
     // Maven Central에서 버전 4.0.6 존재 확인) — micrometer-tracing-bridge-otel(1.6.5) +
     // opentelemetry-exporter-otlp(1.55.0) + micrometer-registry-otlp(1.16.5)를 묶어준다(push 방식,
     // management.opentelemetry.*/management.otlp.* 프로퍼티). 트레이싱은 이걸로, 메트릭은 위 prometheus
-    // 레지스트리를 1순위로 쓰고 otlp 메트릭은 옵트인(ADR-0014 §1) — CLAUDE.md §7이 "micrometer-tracing-bridge-otel
-    // + OTLP exporter, 또는 Boot의 OTel 스타터" 둘 다 허용해 이 스타터를 택했다(수동 의존성 3개 대신 1개, 버전 정합 보장).
+    // 레지스트리를 1순위로 쓰고 otlp 메트릭은 옵트인(ADR-0014 §1). 수동 의존성 3개 대신
+    // 공식 OTel 스타터 하나를 사용해 버전 정합성을 유지한다.
     implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
 
     // 소셜 로그인(카카오/구글 OAuth2 code 교환은 RestClient로 직접 — BFF 패턴, ADR-0004) + JWT 세션.
@@ -68,7 +68,7 @@ dependencies {
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.postgresql:postgresql'
 
-    // S3 presigned URL(제보/후기 사진 업로드, CLAUDE.md §7 Storage). 파일은 서버를 거치지 않고 브라우저가
+    // S3 presigned URL(제보/후기 사진 업로드). 파일은 서버를 거치지 않고 브라우저가
     // 직접 PUT — 백엔드는 S3Presigner로 서명만 발급한다. 자격증명은 ECS 태스크 롤(로컬은 ~/.aws)로 암묵 해석
     // → 정적 액세스키 불필요(규칙 D와 정합).
     implementation 'software.amazon.awssdk:s3'

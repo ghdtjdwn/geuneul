@@ -146,7 +146,7 @@ management:
         geuneul.place.search.nearest: true
   tracing:
     sampling:
-      probability: ${OTEL_TRACES_SAMPLING_PROBABILITY:1.0}   # 트래픽이 적어(포트폴리오 규모) 전량 샘플링 기본값
+      probability: ${OTEL_TRACES_SAMPLING_PROBABILITY:1.0}   # 현재 트래픽이 적어 전량 샘플링 기본값
     export:
       otlp:
         enabled: ${OTEL_TRACING_EXPORT_ENABLED:false}        # 미설정이면 OTLP 트레이스 익스포터 자체를 비활성(주기 전송 시도 없음)

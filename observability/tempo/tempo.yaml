@@ -1,7 +1,7 @@
 # 로컬 전용 Tempo(트레이스 백엔드, single-binary 모드) 설정(ADR-0014). 프로덕션에는 없음.
 # 구성은 grafana/tempo 공식 예제(example/docker-compose/single-binary/tempo.yaml)를 이 레포 규모에
 # 맞게 축소했다 — k6 합성 트래픽 생성기·Alloy 게이트웨이·vulture 카오스 테스트·서비스그래프
-# metrics_generator(Prometheus remote-write 수신 필요)는 포트폴리오 스코프에 과함(CLAUDE.md §0-2)이라 뺐다.
+# metrics_generator(Prometheus remote-write 수신 필요)는 현재 로컬 관측 범위에 필요하지 않아 제외했다.
 # 백엔드가 OTLP를 이 컨테이너로 직접 push한다(OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318, 로컬 실행 시).
 server:
   http_listen_port: 3200

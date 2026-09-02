@@ -7,8 +7,8 @@ const lockfile = readFileSync(new URL("../pnpm-lock.yaml", import.meta.url), "ut
 const patch = readFileSync(new URL("../patches/minimatch@3.1.5.patch", import.meta.url));
 const expectedPatchHash = "5765164f0ee06343670e2867c4f615109123e8b710587cfe098abad80995efa7";
 
-if (!workspace.includes("  brace-expansion: 5.0.8")) {
-  throw new Error("brace-expansion must resolve globally to patched version 5.0.8");
+if (!workspace.includes("  brace-expansion: 5.0.9")) {
+  throw new Error("brace-expansion must resolve globally to patched version 5.0.9");
 }
 if (!workspace.includes("  minimatch@3.1.5: patches/minimatch@3.1.5.patch")) {
   throw new Error("tracked minimatch CommonJS compatibility patch is not configured");
@@ -22,7 +22,7 @@ if (patchHash !== expectedPatchHash || !lockfile.includes(`minimatch@3.1.5: ${ex
 const resolved = new Set(
   [...lockfile.matchAll(/^  brace-expansion@([^:]+):$/gm)].map((match) => match[1]),
 );
-if (resolved.size !== 1 || !resolved.has("5.0.8")) {
+if (resolved.size !== 1 || !resolved.has("5.0.9")) {
   throw new Error(`unsafe brace-expansion lock resolutions: ${[...resolved].join(", ") || "none"}`);
 }
 
@@ -47,4 +47,4 @@ if (expandedLength > maxLength) {
   throw new Error(`brace expansion exceeded maxLength: ${expandedLength}`);
 }
 
-console.log(`dependency security verified: brace-expansion 5.0.8, patch ${patchHash}, PoC ${expandedLength}/${maxLength}`);
+console.log(`dependency security verified: brace-expansion 5.0.9, patch ${patchHash}, PoC ${expandedLength}/${maxLength}`);

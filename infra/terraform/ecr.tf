@@ -5,7 +5,7 @@ resource "aws_ecr_repository" "backend" {
   image_scanning_configuration {
     scan_on_push = true
   }
-  force_delete = true # 포트폴리오/개발 편의. 실전이면 false.
+  force_delete = true # 개발 환경 정리 편의. 장기 보존 환경에서는 false.
 }
 
 # 오래된 이미지 자동 정리(비용 절감) — 최근 10개만 보관.

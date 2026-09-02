@@ -18,14 +18,14 @@ export default function PrivacyPage() {
 
         <h1 className="mt-6 text-[26px] font-extrabold tracking-[-0.5px] text-ink">개인정보처리방침</h1>
         <p className="mt-2 text-[13px] text-ink-3">
-          그늘(Geuneul) · 시행일 2026-07-11 · 개인 포트폴리오 프로젝트
+          그늘(Geuneul) · 시행일 2026-07-11 · 개인 개발 프로젝트
         </p>
 
         <div className="mt-8 space-y-7 text-[14px] leading-relaxed text-ink-2">
           <section>
             <p>
               그늘은 폭염·장마철에 쉬어갈 공공장소(무더위쉼터·화장실·음수대·도서관 등)와 그 “지금 상태”를 지도에서
-              보여주는 <b className="text-ink">개인 개발 포트폴리오 서비스</b>입니다. 본 방침은 그늘이 어떤 정보를 왜
+              보여주는 <b className="text-ink">개인 개발 서비스</b>입니다. 본 방침은 그늘이 어떤 정보를 왜
               수집·이용하는지를 사실대로 설명합니다.
             </p>
           </section>
@@ -110,7 +110,7 @@ export default function PrivacyPage() {
         </div>
 
         <div className="mt-10 border-t border-line-cream pt-6 text-[12px] text-muted">
-          그늘은 법률 자문이 아닌 개인 포트폴리오 프로젝트이며, 침수·안전 정보는 참고용입니다.
+          그늘은 법률 자문을 제공하지 않는 개인 개발 프로젝트이며, 침수·안전 정보는 참고용입니다.
           <div className="mt-2">
             <Link href="/install" className="font-semibold text-teal">앱 설치</Link>
             {" · "}
