@@ -21,7 +21,7 @@
     "sharp": "0.35.3"
   },
   "devDependencies": {
-    "@serwist/next": "^9.5.11",
+    "@serwist/next": "^9.5.13",
     "@tailwindcss/postcss": "^4.3.2",
     "@types/node": "^26.1.0",
     "@types/react": "^19.2.17",
