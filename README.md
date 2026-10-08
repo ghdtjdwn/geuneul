@@ -20,7 +20,6 @@
 
 [![CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/ci.yml)
 [![Frontend CI](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/frontend-ci.yml)
-[![Deploy (OCI ARM64)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml/badge.svg)](https://github.com/ghdtjdwn/geuneul/actions/workflows/deploy.yml)
 
 > 운영 상태(2026-09-03): Vercel 프론트/BFF는 유지하고 AWS의 백엔드와 운영 데이터를 OCI Ampere A1로 이전했다. 출발·도착 인프라 사양, PITR 데이터 구조, 무결성 검증과 컷오버 절차는 [AWS → OCI 무손실 마이그레이션 기록](./docs/OCI-MIGRATION.md)에 공개한다.
 
@@ -50,7 +49,7 @@
 
 ## 핵심 설계
 
-- 공간 검색은 DB 레이어에서 — 반경 `ST_DWithin` · 최근접 kNN `<->` · bounds 조회를 PostGIS GiST 인덱스로 처리한다. 프로덕션 저부하 k6로 반경 p95를 2.68s→~1.4s로 튜닝했고([ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)), 현재 코드는 fingerprint를 고정한 로컬 30만 places에서 p95 1.35s·실패율 0%를 재검증했다(조건이 달라 개선률은 직접 비교하지 않음, [ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
+- 공간 검색은 DB 레이어에서 — 반경 `ST_DWithin` · 최근접 kNN `<->` · bounds 조회를 PostGIS GiST 인덱스로 처리한다. 프로덕션 저부하 k6(4 VU)에서 반경 p95는 2.68s였고, 태스크 CPU를 0.25→0.5 vCPU로 올린 뒤 ~1.4s가 됐다. 인덱스 경로는 그대로였고 병목은 CPU였다([측정 기록](./perf/k6/n9-results.md), [ADR-0012](./docs/adr/0012-k6-load-explain-index-tuning.md)). 현재 코드는 fingerprint를 고정한 로컬 30만 places에서 p95 1.35s·실패율 0%를 재검증했다(조건이 달라 개선률은 직접 비교하지 않음, [ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - 멱등 ETL + 지오코딩 — `source + source_external_id` 자연키로 재실행해도 중복 없는 배치 upsert. 무더위쉼터 60,297 · 공중화장실 52,334 · 도서관 3,551 · 상권 카페/스터디카페 등 전국 표준데이터를 그대로 적재하고, WGS84 결측 좌표는 카카오 지오코딩으로 보완한다. V20 실행 원장은 retry/dead-letter/backfill/freshness를 원본 payload 없이 추적하며, API 부분 응답과 원격 CSV digest 불일치는 DB 변경 전에 실패시킨다([ADR-0030](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)).
 - 실시간 UGC 시공간 스코어링 — 제보(휘발성 상태)/후기(영구 평판) 2단 UGC를 신뢰도 가중으로 `survival_score`에 집계. 제보 급증은 Postgres `LISTEN/NOTIFY` → 멀티 인스턴스 팬아웃 → SSE로, 관심 장소 알림은 `INSERT … RETURNING`으로 정확히 1회 푸시한다([ADR-0016](./docs/adr/0016-realtime-report-surge-listen-notify-sse.md)·[0026](./docs/adr/0026-bookmark-status-change-notification.md)).
 - 서버 검증 보안 경계 — private Object Storage 사진은 조건부 PUT과 일회성 claim으로 소유자·용도·실제 object metadata를 확인한 뒤에만 저장하고, 만료 미사용 object는 bounded cleanup한다. JWT login/logout은 같은 user row에서 직렬화하며 DB token version으로 기존 토큰 사본까지 폐기한다. Redis 레이트리밋은 app instance 간 공유한다([ADR-0031](./docs/adr/0031-security-boundaries-session-upload-rate-limit.md)).
