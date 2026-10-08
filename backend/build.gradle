@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'jacoco'
-    id 'org.springframework.boot' version '4.0.6'
+    id 'org.springframework.boot' version '4.1.0'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -25,7 +25,7 @@ dependencyManagement {
         mavenBom 'org.testcontainers:testcontainers-bom:2.0.5'
         // AWS SDK v2 BOM — S3 presigned URL(사진 업로드, P2). Boot 4가 AWS SDK 버전을 관리하지 않아 직접 고정
         // (2026-07 시점 최신 안정 라인). spring-cloud-aws는 과설계(S3Presigner 하나만 필요) — 배제.
-        mavenBom 'software.amazon.awssdk:bom:2.46.6'
+        mavenBom 'software.amazon.awssdk:bom:2.52.1'
     }
 }
 
@@ -74,10 +74,10 @@ dependencies {
     implementation 'software.amazon.awssdk:s3'
 
     // API 문서 (Swagger UI)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
 
     // 공공데이터 CSV 인제스천 (표준데이터셋 파싱)
-    implementation 'org.apache.commons:commons-csv:1.11.0'
+    implementation 'org.apache.commons:commons-csv:1.14.1'
     // Web Push(F2) — VAPID 전송. zerodep = JDK 내장 crypto(SunEC/SunJCE)만 사용, BouncyCastle 의존 없음
     // → Boot 4 fat-jar/Docker에서 서명 프로바이더 문제 회피(ADR-0018이 F2를 미룬 사유 해소). JDK11+.
     implementation 'com.zerodeplibs:zerodep-web-push-java:2.1.5'
