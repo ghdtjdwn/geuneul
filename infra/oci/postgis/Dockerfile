@@ -2,7 +2,7 @@
 
 # postgis/postgis publishes amd64-only images. Build the same PGDG packages on the
 # official multi-architecture PostgreSQL base so OCI Ampere A1 runs PostGIS natively.
-FROM postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825
+FROM postgres:16.15-bookworm@sha256:5264710be20f409750ac6dc4e5706dcef929c87e241605463f0f9aefa932a8d9
 
 LABEL org.opencontainers.image.source="https://github.com/ghdtjdwn/geuneul" \
       org.opencontainers.image.description="PostgreSQL 16 with PostGIS for Geuneul on OCI ARM64"
