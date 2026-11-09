@@ -146,10 +146,24 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
         with:
           fetch-depth: 0   # 전체 히스토리 스캔(과거 커밋에 새어든 비밀도 탐지)
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # v2는 PR 스캔에 필수(자동 발급 토큰)
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
+  # perf/k6 시나리오가 공유하는 설정 헬퍼(seed·target 차단·summary)의 단위 테스트. k6 자체는 로컬에서만 실행한다.
+  perf-k6:
+    name: perf/k6 helpers (node:test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+      - run: node --test perf/k6/spatial_config.test.js

@@ -1,6 +1,6 @@
 name: Frontend CI
 
-# 프론트 변경에만 반응(backend/** 배포와 독립). typecheck → lint → build 게이트.
+# 프론트 변경에만 반응(backend/** 배포와 독립). audit → typecheck → unit test → lint → build 게이트.
 on:
   push:
     branches: [main]
@@ -25,14 +25,14 @@ jobs:
     name: Next.js (typecheck · lint · build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
 
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115  # v6.1.1
         with:
           # defaults.working-directory 는 run: 스텝에만 적용되므로, 액션엔 명시적으로 경로 지정.
           package_json_file: frontend/package.json
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 24
           cache: pnpm
@@ -52,6 +52,10 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Unit tests
+        # lib/ 의 순수 헬퍼(점수 등급·거리·상대 시각)만 node:test 로 검증. Node 24 가 .ts 를 직접 실행한다.
+        run: pnpm test
 
       - name: Lint
         run: pnpm lint
