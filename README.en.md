@@ -154,7 +154,7 @@ GET /alerts/stream
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS (Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
 | Infrastructure | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform (`infra/oci/`) · retired AWS configuration archived under [`infra/archive/aws/`](./infra/archive/aws/README.md) |
-| Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate (line 87.33% / 541 tests measured locally on 2026-11-09 with `./gradlew test jacocoTestReport`) · DB/request-seeded k6 JSON summaries · gitleaks · CodeQL · Dependabot · local-only Swagger |
+| Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate (line 87.33% / 541 tests measured locally on 2026-11-09 with `./gradlew test jacocoTestReport`) · DB/request-seeded k6 JSON summaries · Prometheus/Grafana · gitleaks · CodeQL · Dependabot · local-only Swagger |
 
 ## Documentation
 
@@ -176,6 +176,7 @@ GET /alerts/stream
 - Reports, reviews, photos, social login, trust weighting, moderation, bookmarks, following, notifications, SSE, and Web Push.
 - Shade and restroom waypoint routes, road polylines, popular-times heatmaps, and responsive desktop/mobile map experiences.
 - PWA installation, Android TWA/APK distribution, iOS Add to Home Screen, CI checks, verified ARM64 release deployment, infrastructure as code, bounded host resources, and observability.
+- Data coverage (as of 2026-07): 52,334 public toilets, 60,297 cooling shelters, 3,551 libraries, and commercial café/study-café data for Seoul, the six metropolitan cities, and nine other cities — more than 150,000 places in total.
 
 ## License
 
