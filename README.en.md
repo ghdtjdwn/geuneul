@@ -152,7 +152,7 @@ GET /alerts/stream
 | Area | Stack |
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS (Hibernate Spatial + JTS) · Flyway · Redis |
-| Frontend | Next.js 16.2.12 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
+| Frontend | Next.js 16 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
 | Infrastructure | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform · retired AWS ECS/RDS source |
 | Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate · DB/request-seeded k6 JSON summaries · gitleaks · CodeQL · Dependabot · local-only Swagger |
 
