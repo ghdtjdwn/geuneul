@@ -38,3 +38,10 @@ updates:
       time: "04:30"
       timezone: Asia/Seoul
     open-pull-requests-limit: 5
+    # 메이저는 수동 작업: postgres는 데이터 디렉터리 호환(pg_upgrade)이, eclipse-temurin은 빌드 toolchain
+    # (Java 21)과의 동시 상향이 필요하다. 마이너·패치만 자동 PR로 받는다.
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eclipse-temurin
+        update-types: ["version-update:semver-major"]
