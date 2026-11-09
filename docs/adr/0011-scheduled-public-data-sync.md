@@ -1,8 +1,8 @@
 # ADR-0011. 공공데이터 주기 동기화 무인화 — EventBridge Scheduler(Universal Target) → ECS RunTask + Postgres advisory lock
 
 - 상태: AWS 운영 이력. 2026-07-10 활성·실트리거를 검증했으나 2026-09-03 OCI 이전 뒤 AWS scheduler는 삭제됐다. `IngestBatchLock`과 ingestion code는 유지되지만 OCI 자동 schedule은 아직 없다.
-- 관련: `IngestBatchLock`(신규), `IngestionRunner`(dispatch 분리 + 락 배선), `infra/terraform/scheduler.tf`(신규),
-  `infra/terraform/ssm.tf`(`datago_service_key`), `infra/terraform/ecs.tf`(`DATA_GO_KR_SERVICE_KEY` secret),
+- 관련: `IngestBatchLock`(신규), `IngestionRunner`(dispatch 분리 + 락 배선), `infra/archive/aws/terraform/scheduler.tf`(신규),
+  `infra/archive/aws/terraform/ssm.tf`(`datago_service_key`), `infra/archive/aws/terraform/ecs.tf`(`DATA_GO_KR_SERVICE_KEY` secret),
   ADR-0002(멱등 upsert)·ADR-0006(soft-delete diff, `IngestionService.deactivateStale`), SPEC.md 로드맵 P3
 
 ## 문제(Context)

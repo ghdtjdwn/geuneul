@@ -1,7 +1,7 @@
 # 브라우저 위치 좌표 지속 저장 제거
 
 - 날짜: 2026-09-02
-- 상태: 코드 수정 및 로컬 검증 완료, 배포 확인 대기
+- 상태: 배포 완료 — main 자동 배포(Vercel production)로 반영됐고, 회귀 방지 스크립트 `pnpm verify:location-privacy`가 Frontend CI에서 실행된다
 - 영향 컴포넌트: `frontend/lib/context/geo.tsx`
 
 ## 맥락과 기대 동작

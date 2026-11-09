@@ -23,7 +23,7 @@ Browser → Vercel Next.js BFF → OCI Caddy HTTPS
 ## 배포 전 조건
 
 1. 배포 대상은 `main`의 full Git SHA여야 한다.
-2. GitHub `Production` environment는 main-only policy와 reviewer를 유지한다.
+2. GitHub `Production` environment의 deployment branch policy는 `main`만 허용하고, workflow의 `authorize` job이 `main` 외 ref의 dispatch를 거부한다.
 3. Backend test·coverage, OCI shell/Python test, Terraform validation이 통과해야 한다.
 4. Server health timer와 최근 36시간 이내 verified backup이 정상이어야 한다.
 5. Boot free 40GiB 이상, inode 사용률 90% 미만이어야 한다.

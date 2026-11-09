@@ -1,4 +1,4 @@
-# 그늘 로컬 개발 인프라 (PostGIS + Redis). 프로덕션은 AWS ECS Fargate + RDS(PostGIS) — infra/(Terraform)·DEPLOY.md 참고.
+# 그늘 로컬 개발 인프라 (PostGIS + Redis). 프로덕션은 Vercel(BFF) + OCI rootless Compose — infra/oci/·DEPLOY.md 참고.
 # 사용: `docker compose up -d` → 백엔드는 backend/에서 `./gradlew bootRun`.
 # 포트는 전부 127.0.0.1 바인딩 — 같은 네트워크의 다른 기기에서 로컬 DB/Grafana에 접근하지 못하게 한다.
 #
