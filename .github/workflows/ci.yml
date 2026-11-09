@@ -23,7 +23,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92  # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c  # v6
       - name: Test + coverage
         # Testcontainers(PostGIS)는 ubuntu-latest의 Docker 데몬 위에서 실행된다.
         # Docker 없는 로컬에서는 self-skip(disabledWithoutDocker). 커버리지 floor 값의 단일 출처는
