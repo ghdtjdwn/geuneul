@@ -14,7 +14,7 @@
 
 [![Public Data](https://img.shields.io/badge/공공데이터-150k%2B_POI-2f9e44)](#데이터--etl-멱등-적재--지오코딩)
 [![Radius p95](https://img.shields.io/badge/반경검색_p95-1.35s_로컬30만-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
-[![Coverage](https://img.shields.io/badge/JaCoCo-87.22%25-17957e)](#기술-스택)
+[![Coverage](https://img.shields.io/badge/JaCoCo_line-87.33%25-17957e)](#기술-스택)
 [![ADR](https://img.shields.io/badge/ADR-32-informational)](./docs/adr/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](./LICENSE)
 
@@ -40,7 +40,7 @@
 ### 모바일 PWA
 
 <p align="center">
-  <a href="https://geuneul.vercel.app"><img src="https://github.com/user-attachments/assets/d437d24f-d1f0-4250-a3bf-0762ae36b612" alt="모바일 지도 — 검색과 주변 장소 바텀시트" width="260" /></a>
+  <a href="https://geuneul.vercel.app"><img src="./docs/media/demo-mobile-bottomsheet.png" alt="모바일 지도 — 검색과 주변 장소 바텀시트" width="260" /></a>
 </p>
 
 모바일에서는 지도와 바텀시트로 주변 장소를 탐색하고, 상황별 추천으로 바로 갈 곳을 찾습니다. 브라우저로 바로 열거나 PWA와 Android 앱으로 설치해 사용할 수 있습니다. 시나리오 추천을 포함한 다른 화면은 [아키텍처 문서](./docs/architecture.md#데모)에 정리했습니다.
@@ -90,6 +90,14 @@ freshness 버킷:  0~1h=1.0 | 1~3h=0.8 | 오늘=0.6 | 이번주=0.3 | 그 외=0.
 ## 데이터 · ETL (멱등 적재 + 지오코딩)
 
 전국 공공 표준데이터를 멱등(idempotent) 하게 적재한다 — 같은 소스를 두 번 넣어도 `source + source_external_id` 자연키 upsert라 중복이 없고, 스냅샷에서 사라진 행은 soft-delete로 비활성화된다. 공중화장실은 2025-02 이후 WGS84 좌표 미제공 → 카카오 로컬 API로 주소→좌표를 보완하고 결과를 저장한다(멱등·rate limit 회피). one-off 실행 결과는 DB 원장에 남아 상시 API의 로컬 Prometheus/Grafana 대시보드에서 freshness·부분 실패·재실행 계보를 확인할 수 있다. 상세 흐름은 [docs/architecture.md](./docs/architecture.md#데이터--etl).
+
+| 데이터 | 갱신 정책 |
+|---|---|
+| 도서관 | 운영 DB에 보존. AWS 월간 scheduler를 폐기한 뒤 OCI 대체 timer가 아직 없어 자동 갱신은 중단 상태 |
+| 날씨 | 요청 시 자동. Redis TTL 30분이 지나면 다시 조회 |
+| 사용자 제보 | 제출 즉시 반영. 급증은 SSE로 전달 |
+| 무더위쉼터·공중화장실 | 수동. 새 CSV 스냅샷을 검증한 뒤 OCI one-off ingestion으로 적재 |
+| 카페·스터디카페 | 수동. 원천 데이터 제공 여부와 수집 범위를 확인한 뒤 적재 |
 
 ## 빠른 시작 (로컬)
 
@@ -146,8 +154,8 @@ GET /alerts/stream            # text/event-stream (SSE)
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS(Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16(App Router) · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist(PWA) — `frontend/` ([README](./frontend/README.md)) |
-| Infra | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform · AWS ECS/RDS 이전 원본 |
-| Test/Ops | Testcontainers 2(실 PostGIS) · JaCoCo(게이트 70%) · DB/요청 seed 고정 k6+JSON summary · Prometheus/Grafana · gitleaks · CodeQL · Dependabot · 로컬 전용 Swagger |
+| Infra | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform(`infra/oci/`) · 폐기된 AWS 구성은 [`infra/archive/aws/`](./infra/archive/aws/README.md)에 보관 |
+| Test/Ops | Testcontainers 2(실 PostGIS) · JaCoCo(게이트 70% · 2026-11-09 `./gradlew test jacocoTestReport` 로컬 측정 라인 87.33%, 541 tests) · DB/요청 seed 고정 k6+JSON summary · Prometheus/Grafana · gitleaks · CodeQL · Dependabot · 로컬 전용 Swagger |
 
 ## 문서
 

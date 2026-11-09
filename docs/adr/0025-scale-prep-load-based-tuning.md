@@ -2,7 +2,7 @@
 
 - 상태: 승인(구현 반영·프로덕션 적용, 2026-07-11)
 - 관련: ADR-0012(P4 부하테스트·EXPLAIN)·ADR-0013(오토스케일링)·TS-005(느린 부팅), `Flyway V18`,
-  `perf/k6/n9-results.md`·`perf/explain/n9-me-activity-tuning.txt`, `infra/terraform`(task_cpu), SPEC.md §7·§10(P4)
+  `perf/k6/n9-results.md`·`perf/explain/n9-me-activity-tuning.txt`, `infra/archive/aws/terraform`(task_cpu), SPEC.md §7·§10(P4)
 - 후속: BACKLOG N9(구 F6 승격)
 
 ## 문제(Context)

@@ -1,5 +1,5 @@
 server:
-  port: ${PORT:8080}          # ECS 태스크 정의(ecs.tf)가 PORT=8080을 주입. 로컬 기본 8080.
+  port: ${PORT:8080}          # 운영 compose(infra/oci)가 PORT를 주입. 로컬 기본 8080.
 
 spring:
   application:
@@ -128,11 +128,11 @@ management:
   endpoints:
     web:
       exposure:
-        # ADR-0014: prometheus는 옵트인(기본 health,info만) — ECS는 MANAGEMENT_EXPOSURE를 안 주입하므로
+        # ADR-0014: prometheus는 옵트인(기본 health,info만) — 운영 compose는 MANAGEMENT_EXPOSURE를 안 주입하므로
         # 프로덕션은 항상 이 기본값(prometheus 미노출). 로컬 observability 스택(docker-compose --profile
         # observability)에서 백엔드를 그 프로필로 띄울 때만 health,info,prometheus로 켠다.
         # (2026-07 라이브 재확인: 이 옵트인 도입 전엔 health,info,prometheus가 하드코딩돼 있어
-        # /actuator/prometheus가 ALB를 통해 인증 없이 공개돼 있었다 — 이번 변경이 그 노출을 닫는다.)
+        # /actuator/prometheus가 당시 AWS ALB를 통해 인증 없이 공개돼 있었다 — 이번 변경이 그 노출을 닫는다.)
         include: ${MANAGEMENT_EXPOSURE:health,info}
   endpoint:
     health:
@@ -140,7 +140,7 @@ management:
         enabled: true
   health:
     redis:
-      enabled: false     # Redis 미프로비저닝 단계 — ALB 헬스체크(/actuator/health) 방해 방지. P3 캐시 도입 시 재활성화.
+      enabled: false     # Redis 장애가 readiness(/actuator/health)를 끌어내리지 않도록 health 집계에서 제외. 캐시·레이트리밋은 fail-safe.
   metrics:
     tags:
       application: ${spring.application.name}   # Prometheus job 여러 개를 붙일 로컬 Grafana에서 app별 필터링용

@@ -23,7 +23,7 @@
 | 추가 Block Volume | 0개 | Console |
 | Boot backup | 주간 정책 연결, 일요일 06:00 로컬 스케줄 | Console |
 | OCI agent | Compute Monitoring, Custom Logs Monitoring, Cloud Guard Workload Protection 실행 | Console |
-| 확인된 Geuneul release | `203028d648c6cd4dd26a966e7eadaec7c7a87c7c` | Cutover |
+| 현재 Geuneul release | 마지막으로 성공한 **Deploy (OCI ARM64)** workflow run의 head SHA가 server release marker와 같다(Actions 탭에서 확인). 컷오버 당시 release는 [OCI-MIGRATION.md](./OCI-MIGRATION.md) 참고 | Deploy workflow |
 
 Vulnerability Scanning, OS Management Hub, Management Agent, Bastion, Block Volume Management plugin은 비활성 상태다. Boot backup의 cross-region replication과 Full Stack DR도 활성화하지 않았다. 따라서 이 구조는 비용을 최소화한 단일 호스트 운영이지, 다중 리전 재해복구 구성이 아니다.
 

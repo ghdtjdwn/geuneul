@@ -1,4 +1,4 @@
-// 클라이언트 fetch 계층. 브라우저는 항상 동일 오리진 /api/* 프록시만 호출한다(ALB 직접 호출 금지).
+// 클라이언트 fetch 계층. 브라우저는 항상 동일 오리진 /api/* 프록시만 호출한다(백엔드 직접 호출 금지).
 import type { MyComment, MyReaction, MyReview } from "@/types/activity";
 import type { SurgeInfo } from "@/types/alert";
 import type { AdminFlagList, Flag, FlagCreatePayload, FlagStatus } from "@/types/flag";

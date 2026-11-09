@@ -3,7 +3,7 @@
 - 상태: 승인 (2026-07-10) · 프로바이더 중립 리네임 + Mistral 전환 반영 (2026-07-10, §4)
 - 관련: `domain/ai/ChatCompletionClient`, `domain/ai/AiSummaryService`, `PlaceResponse.of(ScoredPlaceView, Double, Double, String)`,
   `PlaceSearchService.getById`, `RedisCacheConfig`(aiSummary 캐시), `application.yml`(`ai.summary.*`),
-  `infra/terraform/ssm.tf`·`variables.tf`·`ecs.tf`(`ai_summary_api_key`, apply는 오케스트레이터가 별도 실행)
+  `infra/archive/aws/terraform/ssm.tf`·`variables.tf`·`ecs.tf`(`ai_summary_api_key`, apply는 오케스트레이터가 별도 실행)
 - 선행: [ADR-0009](0009-weather-comfort-additive-restore.md)(같은 "요청당 1회·graceful degradation" 패턴을
   AI 요약에도 재사용), SPEC.md §3(AI 요약 MVP)·§6(상세화면 AI요약)·§8(AI 스택)·§0-8/9(곁다리 원칙)
 

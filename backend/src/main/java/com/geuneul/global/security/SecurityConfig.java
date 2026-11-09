@@ -19,7 +19,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * /me·POST /reviews·POST /flags·/admin/**만 인증(또는 ADMIN)을 요구하고 그 외 전부
  * permitAll(default-permit). 로그인 필요한 신규 기능이 늘어나면 그때 requestMatchers로 명시 추가한다.
  *
- * - CSRF 비활성(토큰 기반 무상태 API, 쿠키 세션 없음), 세션 STATELESS.
+ * - CSRF 비활성(토큰 기반 무상태 API, 쿠키 세션 없음), 세션 STATELESS. 이 서비스는 브라우저 쿠키로 인증하지
+ *   않는다 — Vercel BFF가 httpOnly 쿠키를 Authorization: Bearer 헤더로 바꿔 전달하므로(ADR-0004) CSRF가
+ *   성립하지 않는다. CodeQL java/spring-disabled-csrf-protection 경고는 이 근거로 dismiss했다.
  * - 미인증 보호 경로는 401(로그인 페이지 리다이렉트 아님 — API).
  * - formLogin/httpBasic 비활성(소셜 로그인만).
  * - POST /reviews만 보호(작성=로그인 필요, §1 UGC 2단 구조) — GET /places/{id}/reviews(조회)는

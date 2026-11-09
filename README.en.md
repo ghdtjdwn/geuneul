@@ -12,9 +12,9 @@
 
 [![Production](https://img.shields.io/badge/production-Vercel_%2B_OCI-17957e)](https://geuneul.vercel.app)
 
-[![Public Data](https://img.shields.io/badge/Public_data-150k%2B_POI-2f9e44)](#data-etl)
+[![Public Data](https://img.shields.io/badge/Public_data-150k%2B_POI-2f9e44)](#data-and-etl)
 [![Radius p95](https://img.shields.io/badge/Radius_p95-1.35s_local_300k-17957e)](./docs/adr/0030-ingest-operational-ledger-deterministic-load.md)
-[![Coverage](https://img.shields.io/badge/JaCoCo-87.22%25-17957e)](#technology)
+[![Coverage](https://img.shields.io/badge/JaCoCo_line-87.33%25-17957e)](#technology)
 [![ADR](https://img.shields.io/badge/ADR-32-informational)](./docs/adr/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](./LICENSE)
 
@@ -40,7 +40,7 @@ Check a place's condition, amenities, and recent reports, then find a route with
 ### Mobile PWA
 
 <p align="center">
-  <a href="https://geuneul.vercel.app"><img src="https://github.com/user-attachments/assets/d437d24f-d1f0-4250-a3bf-0762ae36b612" alt="Mobile map: search and nearby-place bottom sheet" width="260" /></a>
+  <a href="https://geuneul.vercel.app"><img src="./docs/media/demo-mobile-bottomsheet.png" alt="Mobile map: search and nearby-place bottom sheet" width="260" /></a>
 </p>
 
 On mobile, the map and bottom sheet support nearby discovery, while scenario recommendations help users choose a place quickly. The service works in a browser and can also be installed as a PWA or Android app. More screens, including scenario recommendations, are in the [architecture document](./docs/architecture.md#데모).
@@ -153,8 +153,8 @@ GET /alerts/stream
 |---|---|
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS (Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
-| Infrastructure | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform · retired AWS ECS/RDS source |
-| Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate · DB/request-seeded k6 JSON summaries · gitleaks · CodeQL · Dependabot · local-only Swagger |
+| Infrastructure | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform (`infra/oci/`) · retired AWS configuration archived under [`infra/archive/aws/`](./infra/archive/aws/README.md) |
+| Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate (line 87.33% / 541 tests measured locally on 2026-11-09 with `./gradlew test jacocoTestReport`) · DB/request-seeded k6 JSON summaries · gitleaks · CodeQL · Dependabot · local-only Swagger |
 
 ## Documentation
 
@@ -162,6 +162,7 @@ GET /alerts/stream
 - Complete feature, implementation, and stack guide: [docs/FEATURES.md](./docs/FEATURES.md) (Korean)
 - Architecture and screenshots: [docs/architecture.md](./docs/architecture.md)
 - Technical decision records: [docs/adr/](./docs/adr) ([index](./docs/adr/README.md), 0001–0032)
+- Troubleshooting: [removing persistent browser location storage](./docs/troubleshooting/location-storage-retention.md) (Korean)
 - OCI deployment and recovery: [DEPLOY.md](./DEPLOY.md)
 - OCI host, services, storage, and operating limits: [docs/OCI-RUNTIME.md](./docs/OCI-RUNTIME.md)
 - AWS-to-OCI source/target specifications and data-preserving migration record: [docs/OCI-MIGRATION.md](./docs/OCI-MIGRATION.md) · [ADR-0032](./docs/adr/0032-oci-arm64-self-hosted-migration.md)

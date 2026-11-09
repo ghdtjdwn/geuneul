@@ -3,7 +3,7 @@
 > **Live:** https://geuneul.vercel.app
 > 루트 README에는 제품·백엔드·인프라 전체 개요를, 이 문서에는 Next.js 클라이언트의 실행과 구조만 남긴다.
 
-Next.js 16 App Router 기반 PWA입니다. 브라우저는 같은 오리진의 `/api/*` Route Handler만 호출하고, 서버 측 BFF가 CloudFront를 거쳐 Spring Boot API에 연결합니다. 백엔드 주소와 인증 비밀은 브라우저 번들에 포함하지 않습니다.
+Next.js 16 App Router 기반 PWA입니다. 브라우저는 같은 오리진의 `/api/*` Route Handler만 호출하고, 서버 측 BFF가 OCI의 HTTPS origin(Caddy)을 거쳐 Spring Boot API에 연결합니다. 백엔드 주소와 인증 비밀은 브라우저 번들에 포함하지 않습니다.
 
 ## 제공 기능
 
@@ -33,8 +33,8 @@ types/           API 경계 타입
 `.env.local`에만 저장하며 커밋하지 않습니다.
 
 ```bash
-# 서버 전용: CloudFront HTTPS 오리진
-GEUNEUL_API_BASE=https://<cloudfront-domain>
+# 서버 전용: 백엔드 HTTPS origin(OCI Caddy)
+GEUNEUL_API_BASE=https://<backend-origin>
 
 # 브라우저 공개값: Kakao JavaScript SDK 도메인 허용목록으로 보호
 NEXT_PUBLIC_KAKAO_MAP_JS_KEY=<kakao-javascript-key>
@@ -61,4 +61,4 @@ Serwist가 webpack 플러그인을 사용하므로 개발·빌드는 `--webpack`
 
 `main` push는 Vercel Production 배포를 자동으로 시작합니다. GitHub Actions의 Frontend CI는 `typecheck → lint → build`를 별도로 검증합니다. Vercel에는 위 세 환경 변수를 Production 값으로 등록합니다.
 
-인증, API 계약, AWS 배포와 성능 근거는 각각 [루트 README](../README.md), [아키텍처](../docs/architecture.md), [배포 문서](../DEPLOY.md)를 기준으로 합니다.
+인증, API 계약, 배포와 성능 근거는 각각 [루트 README](../README.md), [아키텍처](../docs/architecture.md), [배포 문서](../DEPLOY.md)를 기준으로 합니다.

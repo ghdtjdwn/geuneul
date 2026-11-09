@@ -19,7 +19,7 @@ In scope:
 
 Out of scope:
 
-- testing Kakao, Naver, AWS, Vercel, or another third party's own systems;
+- testing Kakao, Google, Oracle Cloud, Vercel, or another third party's own systems;
 - denial-of-service activity, social engineering, physical attacks, or destructive testing;
 - findings that require exposing real user data or secrets.
 

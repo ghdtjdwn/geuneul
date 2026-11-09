@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-EXPORT_SCRIPT = REPOSITORY_ROOT / "infra" / "scripts" / "prod-export-db.sh"
+EXPORT_SCRIPT = REPOSITORY_ROOT / "infra" / "archive" / "aws" / "scripts" / "prod-export-db.sh"
 
 
 class ProductionExportScriptTest(unittest.TestCase):

@@ -1,6 +1,6 @@
-// 서버 전용. 브라우저는 동일 오리진 /api/* 만 호출하고, 이 프록시가 ALB 로 대신 요청한다.
-// → ALB 가 http(TLS 없음)이고 CORS 미설정이어도 mixed-content/CORS 를 동시에 회피.
-// GEUNEUL_API_BASE 는 서버 전용 env(NEXT_PUBLIC 아님)라 ALB 호스트가 클라이언트 번들에 노출되지 않는다.
+// 서버 전용. 브라우저는 동일 오리진 /api/* 만 호출하고, 이 프록시가 백엔드 origin으로 대신 요청한다.
+// → 백엔드에 CORS 를 열지 않아도 되고, 백엔드 호스트가 브라우저에 드러나지 않는다.
+// GEUNEUL_API_BASE 는 서버 전용 env(NEXT_PUBLIC 아님)라 백엔드 호스트가 클라이언트 번들에 노출되지 않는다.
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth";
@@ -13,7 +13,7 @@ const TIMEOUT_MS = 10_000;
 async function backendFetch(path: string, search: string, request?: NextRequest): Promise<Response> {
   const url = `${BASE}${path}${search ? `?${search}` : ""}`;
   // 레이트리밋 대상 GET(검색·경로)은 원 클라이언트 신원을 보존해야 유저별 버킷으로 잡힌다 —
-  // 안 보내면 백엔드 ProxyClientResolver가 ALB 최우측 XFF(=Vercel egress IP)로 키잉해 전 유저가 버킷을 공유한다.
+  // 안 보내면 백엔드 ProxyClientResolver가 최우측 XFF(=Vercel egress IP)로 키잉해 전 유저가 버킷을 공유한다.
   const identity: Record<string, string> = {};
   if (request) {
     const xff = request.headers.get("x-forwarded-for") ?? "";
@@ -308,7 +308,7 @@ export async function proxyStream(path: string, search: string): Promise<Respons
   }
 }
 
-// ALB에서 JSON을 받아 파싱하는 서버측 헬퍼(BASE 미설정/4xx·5xx는 throw).
+// 백엔드에서 JSON을 받아 파싱하는 서버측 헬퍼(BASE 미설정/4xx·5xx는 throw).
 // 급해요의 카테고리별 nearest 팬아웃·병합은 이 헬퍼를 여러 번 호출하는 app/api/urgent/route.ts에 있다.
 export async function backendJson<T>(path: string, search: string): Promise<T> {
   if (!BASE) throw new Error("GEUNEUL_API_BASE not configured");

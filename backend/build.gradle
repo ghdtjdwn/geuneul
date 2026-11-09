@@ -69,8 +69,8 @@ dependencies {
     implementation 'org.postgresql:postgresql'
 
     // S3 presigned URL(제보/후기 사진 업로드). 파일은 서버를 거치지 않고 브라우저가
-    // 직접 PUT — 백엔드는 S3Presigner로 서명만 발급한다. 자격증명은 ECS 태스크 롤(로컬은 ~/.aws)로 암묵 해석
-    // → 정적 액세스키 불필요(규칙 D와 정합).
+    // 직접 PUT — 백엔드는 S3Presigner로 서명만 발급한다. 자격증명은 env(AWS_ACCESS_KEY_ID/SECRET,
+    // OCI S3 compatibility Customer Secret Key)로 주입하고 레포에는 두지 않는다(규칙 D와 정합).
     implementation 'software.amazon.awssdk:s3'
 
     // API 문서 (Swagger UI)
