@@ -115,10 +115,12 @@ jobs:
             --env POSTGRES_PASSWORD=ci-postgres-admin-password \
             --env GEUNEUL_DB_PASSWORD=ci-database-password \
             geuneul-postgis:arm64-ci
-          # pg_isready는 entrypoint 초기화 중 임시 서버에도 성공해서 "database geuneul does not exist"로
-          # 바로 이어지는 psql이 실패할 수 있다. init 스크립트가 끝나 geuneul DB에 실제로 붙을 때까지 기다린다.
+          # entrypoint는 init 스크립트를 임시 서버에서 돌린 뒤 그 서버를 내리고 본 서버를 다시 띄운다.
+          # pg_isready나 임시 서버에 대한 SELECT 1은 그 사이에도 성공하므로("database does not exist",
+          # "database system is shutting down"), init 완료 로그가 찍힌 뒤 geuneul DB에 실제로 붙을 때까지 기다린다.
           for attempt in $(seq 1 90); do
-            if docker exec "$container" psql -U geuneul_admin -d geuneul -tAc 'SELECT 1' 2>/dev/null | grep -qx 1; then
+            if docker logs "$container" 2>&1 | grep -q 'PostgreSQL init process complete' \
+              && docker exec "$container" psql -U geuneul_admin -d geuneul -tAc 'SELECT 1' 2>/dev/null | grep -qx 1; then
               break
             fi
             if [ "$attempt" -eq 90 ]; then
