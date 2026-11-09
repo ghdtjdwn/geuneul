@@ -15,7 +15,7 @@
 ```mermaid
 flowchart LR
   subgraph client["브라우저 · PWA"]
-    UI["Next.js 16.2.12 App Router<br/>Kakao Maps · Serwist SW<br/>TanStack Query"]
+    UI["Next.js 16 App Router<br/>Kakao Maps · Serwist SW<br/>TanStack Query"]
   end
 
   subgraph vercel["Vercel"]
