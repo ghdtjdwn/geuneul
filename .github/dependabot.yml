@@ -18,3 +18,23 @@ updates:
       time: "03:30"
       timezone: Asia/Seoul
     open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /infra/oci/postgis
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
