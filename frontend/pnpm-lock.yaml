@@ -37,8 +37,8 @@ importers:
         specifier: ^19.2.7
         version: 19.2.7(react@19.3.1)
       react-kakao-maps-sdk:
-        specifier: ^1.2.1
-        version: 1.2.1(kakao.maps.d.ts@0.1.40)(react-dom@19.2.7(react@19.3.1))(react@19.3.1)
+        specifier: ^1.2.2
+        version: 1.2.2(kakao.maps.d.ts@0.1.40)(react-dom@19.2.7(react@19.3.1))(react@19.3.1)
       sharp:
         specifier: 0.35.5
         version: 0.35.5(@types/node@26.1.0)
@@ -141,8 +141,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  '@babel/runtime@7.29.7':
-    resolution: {integrity: sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==}
+  '@babel/runtime@7.29.13':
+    resolution: {integrity: sha512-v+oN26xP4YIlQsbQ/CbTH1WG5m/l/DjKKZNy/Kp3f/AFvbgt7Em/D0FeMM3O2hX0YzeN2M16W8lOpyhIkfCBcQ==}
     engines: {node: '>=6.9.0'}
 
   '@babel/template@7.29.7':
@@ -1855,8 +1855,8 @@ packages:
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
 
-  react-kakao-maps-sdk@1.2.1:
-    resolution: {integrity: sha512-qvdt+82D/MxTxmgF9tXaqa6eNqMUiFOeEdn+PyU0u9EHoxeD9WMJeHkum/GWrbP62MR0qWPtZ/G4iM9f2/1TPQ==}
+  react-kakao-maps-sdk@1.2.2:
+    resolution: {integrity: sha512-UBSUKsq7Ju3pYKlm3NuzyredY5Ww2UCGnXzI0DsiWOan0w/ErJdOruSHm8BCSmw1/3T0PpnvJv6XL3wM3X7crg==}
     peerDependencies:
       kakao.maps.d.ts: ^0.1.40
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -2135,8 +2135,8 @@ packages:
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
-  use-sync-external-store@1.6.0:
-    resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
+  use-sync-external-store@1.7.0:
+    resolution: {integrity: sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -2268,7 +2268,7 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.7
 
-  '@babel/runtime@7.29.7': {}
+  '@babel/runtime@7.29.13': {}
 
   '@babel/template@7.29.7':
     dependencies:
@@ -4030,13 +4030,13 @@ snapshots:
 
   react-is@16.13.1: {}
 
-  react-kakao-maps-sdk@1.2.1(kakao.maps.d.ts@0.1.40)(react-dom@19.2.7(react@19.3.1))(react@19.3.1):
+  react-kakao-maps-sdk@1.2.2(kakao.maps.d.ts@0.1.40)(react-dom@19.2.7(react@19.3.1))(react@19.3.1):
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.13
       kakao.maps.d.ts: 0.1.40
       react: 19.3.1
       react-dom: 19.2.7(react@19.3.1)
-      use-sync-external-store: 1.6.0(react@19.3.1)
+      use-sync-external-store: 1.7.0(react@19.3.1)
 
   react@19.3.1: {}
 
@@ -4419,7 +4419,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  use-sync-external-store@1.6.0(react@19.3.1):
+  use-sync-external-store@1.7.0(react@19.3.1):
     dependencies:
       react: 19.3.1
 
