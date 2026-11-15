@@ -31,7 +31,7 @@
     "eslint-config-next": "^16.4.5",
     "kakao.maps.d.ts": "^0.1.40",
     "postcss": "8.5.32",
-    "serwist": "^9.5.11",
+    "serwist": "^9.5.13",
     "tailwindcss": "^4.3.4",
     "typescript": "^6.0.3"
   }
