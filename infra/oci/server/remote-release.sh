@@ -10,7 +10,7 @@ readonly production_environment="${shared_directory}/production.env"
 readonly current_link="${deploy_root}/current"
 readonly previous_release_file="${shared_directory}/previous-release"
 readonly deployment_lock="${shared_directory}/deployment.lock"
-readonly postgis_image="geuneul-postgis:16.15-3.6.4"
+readonly postgis_image="geuneul-postgis:16.16-3.6.4"
 
 incoming_directory=""
 archive_path=""
