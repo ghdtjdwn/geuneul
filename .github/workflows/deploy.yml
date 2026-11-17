@@ -88,13 +88,13 @@ jobs:
           docker buildx build --platform linux/arm64 \
             --cache-from type=gha,scope=geuneul-postgis-arm64 \
             --cache-to type=gha,mode=max,scope=geuneul-postgis-arm64 \
-            --tag geuneul-postgis:16.15-3.6.4 \
+            --tag geuneul-postgis:16.16-3.6.4 \
             --output "type=docker,dest=${RUNNER_TEMP}/postgis-image.tar" infra/oci/postgis
           docker load --input "${RUNNER_TEMP}/backend-image.tar" >/dev/null
           docker load --input "${RUNNER_TEMP}/postgis-image.tar" >/dev/null
           test "$(docker image inspect --format '{{.Architecture}}' "geuneul-backend:$RELEASE_SHA")" = arm64
           test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "geuneul-backend:$RELEASE_SHA")" = "$RELEASE_SHA"
-          test "$(docker image inspect --format '{{.Architecture}}' geuneul-postgis:16.15-3.6.4)" = arm64
+          test "$(docker image inspect --format '{{.Architecture}}' geuneul-postgis:16.16-3.6.4)" = arm64
       - name: Assemble bounded release archive
         env:
           RELEASE_SHA: ${{ github.sha }}

@@ -27,7 +27,7 @@
 | 프론트/BFF | Vercel Next.js, 서버 전용 origin이 CloudFront를 가리킴 | Vercel 유지, 서버 전용 origin만 OCI HTTPS로 변경 |
 | 공개 edge | CloudFront HTTP/2·3, cache disabled → ALB HTTP listener | 기존 OCI public edge와 Caddy HTTPS/SNI route 재사용, 신규 LB 없음 |
 | 애플리케이션 | ECS Fargate 0.5 vCPU·1GB, desired 1, CPU 60% target tracking 1–3 tasks, task별 public IP | 기존 `VM.Standard.A1.Flex` 2 OCPU·12GB VM의 전용 rootless Docker user, cgroup `CPUQuota=75%`, `MemoryMax=3G`, swap 0 |
-| 데이터베이스 | RDS PostgreSQL 16 `db.t3.micro`, Single-AZ, private subnet, encrypted gp3 20GB, PITR 1일 | PostgreSQL 16.15 + PostGIS 3.6.4 native ARM64, 전용 rootless volume·internal network, admin/app role 분리 |
+| 데이터베이스 | RDS PostgreSQL 16 `db.t3.micro`, Single-AZ, private subnet, encrypted gp3 20GB, PITR 1일 | PostgreSQL 16.16 + PostGIS 3.6.4 native ARM64, 전용 rootless volume·internal network, admin/app role 분리 |
 | 캐시 | ElastiCache Redis 7.1 `cache.t3.micro` 1 node, private subnet | Redis 7.4, 192MiB container limit, internal network, AOF와 bounded memory |
 | 객체 저장소 | private S3, public access block, presigned PUT/GET | private OCI Object Storage 두 bucket, S3 compatibility API, photo versioning·이전 버전 30일, DB backup 14일 lifecycle |
 | 배포·비밀 | ECR, ECS task definition, SSM Parameter Store, GitHub OIDC deploy | GitHub ARM64 archive build, SHA-256·architecture·revision 검증, forced-command SSH gateway, mode-0600 env |

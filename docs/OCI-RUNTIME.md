@@ -39,7 +39,7 @@ Browser / installed PWA
       ├─ MarketValley hostname → MarketValley Next.js
       └─ /object-storage/* PUT → fixed OCI Object Storage endpoint
   → Geuneul internal data network
-      ├─ PostgreSQL 16.15 + PostGIS 3.6.4
+      ├─ PostgreSQL 16.16 + PostGIS 3.6.4
       └─ Redis 7.4
 ```
 

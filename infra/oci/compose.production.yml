@@ -2,7 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:-geuneul}
 
 services:
   postgres:
-    image: geuneul-postgis:16.15-3.6.4
+    image: geuneul-postgis:16.16-3.6.4
     build:
       context: ./postgis
       dockerfile: Dockerfile
