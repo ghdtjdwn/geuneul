@@ -154,7 +154,7 @@ GET /alerts/stream
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS (Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16 App Router · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist PWA ([frontend README](./frontend/README.md)) |
 | Infrastructure | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform (`infra/oci/`) · retired AWS configuration archived under [`infra/archive/aws/`](./infra/archive/aws/README.md) |
-| Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate (line 87.33% / 541 tests measured locally on 2026-11-09 with `./gradlew test jacocoTestReport`) · DB/request-seeded k6 JSON summaries · Prometheus/Grafana · gitleaks · CodeQL · Dependabot · local-only Swagger |
+| Quality and operations | Testcontainers 2 with real PostGIS · JaCoCo 70% gate (line 87.33% / 541 tests measured locally on 2026-11-09 with `./gradlew test jacocoTestReport`) · DB/request-seeded k6 JSON summaries · Prometheus/Grafana · gitleaks · CodeQL · local-only Swagger |
 
 ## Documentation
 

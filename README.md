@@ -155,7 +155,7 @@ GET /alerts/stream            # text/event-stream (SSE)
 | Backend | Spring Boot 4 · Java 21 · PostgreSQL + PostGIS(Hibernate Spatial + JTS) · Flyway · Redis |
 | Frontend | Next.js 16(App Router) · TypeScript · Tailwind v4 · TanStack Query · Kakao Maps · Serwist(PWA) — `frontend/` ([README](./frontend/README.md)) |
 | Infra | Vercel frontend/BFF · OCI Ampere A1 ARM64 rootless Compose · OCI Object Storage · Terraform(`infra/oci/`) · 폐기된 AWS 구성은 [`infra/archive/aws/`](./infra/archive/aws/README.md)에 보관 |
-| Test/Ops | Testcontainers 2(실 PostGIS) · JaCoCo(게이트 70% · 2026-11-09 `./gradlew test jacocoTestReport` 로컬 측정 라인 87.33%, 541 tests) · DB/요청 seed 고정 k6+JSON summary · Prometheus/Grafana · gitleaks · CodeQL · Dependabot · 로컬 전용 Swagger |
+| Test/Ops | Testcontainers 2(실 PostGIS) · JaCoCo(게이트 70% · 2026-11-09 `./gradlew test jacocoTestReport` 로컬 측정 라인 87.33%, 541 tests) · DB/요청 seed 고정 k6+JSON summary · Prometheus/Grafana · gitleaks · CodeQL · 로컬 전용 Swagger |
 
 ## 문서
 
