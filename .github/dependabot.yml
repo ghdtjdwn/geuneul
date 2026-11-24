@@ -34,6 +34,9 @@ updates:
       timezone: Asia/Seoul
     open-pull-requests-limit: 5
     groups:
+      # init과 analyze는 같은 버전이어야 해서 SHA 갱신도 한 PR로 묶는다.
+      codeql-action:
+        patterns: ["github/codeql-action*"]
       actions-minor-and-patch:
         update-types: [minor, patch]
 
