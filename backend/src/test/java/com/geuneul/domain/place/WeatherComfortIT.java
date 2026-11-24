@@ -1,7 +1,5 @@
 package com.geuneul.domain.place;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.geuneul.AbstractIntegrationTest;
 import com.geuneul.domain.report.Report;
 import com.geuneul.domain.report.ReportRepository;
@@ -18,6 +16,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -50,7 +51,7 @@ class WeatherComfortIT extends AbstractIntegrationTest {
     // 앱 컨텍스트의 ObjectMapper 빈에 의존하지 않는다 — 이 IT의 관심사는 응답 JSON의 단순 필드 파싱뿐이라
     // 커스텀 모듈이 필요 없고, @SpringBootTest(웹 MVC 슬라이스 없이) 컨텍스트엔 JacksonAutoConfiguration이
     // 항상 ObjectMapper 빈을 등록해 주지 않는다(WebMvcTest와 달리).
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder().build();
 
     @Autowired
     MockMvc mvc;
