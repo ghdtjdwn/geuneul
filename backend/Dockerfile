@@ -2,7 +2,7 @@
 # 그늘 백엔드 멀티아키텍처 이미지. 멀티스테이지로 빌드 도구와 런타임을 분리한다.
 
 # --- build stage ---
-FROM eclipse-temurin:21-jdk@sha256:0a3f329821dcadf54b2a3033a15e2e9f007069a9db43d7f51897e6b80e726b07 AS build
+FROM eclipse-temurin:21-jdk@sha256:8ad118b146aa92da815b576441acd6b42b38236797ad0b6edc8c200b85bb0734 AS build
 WORKDIR /app
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
@@ -10,7 +10,7 @@ COPY src src
 RUN chmod +x gradlew && ./gradlew bootJar --no-daemon
 
 # --- run stage ---
-FROM eclipse-temurin:21-jre@sha256:18bb4a91a3dea3f03ee31d3755af34dfb40f904fc77ab56cdc2f092e32fff9c2
+FROM eclipse-temurin:21-jre@sha256:d77e090ae1f6970c047b443c6f0a6c1358b0426d44432bb5a7753408cd43de0d
 ARG APP_VERSION=unknown
 LABEL org.opencontainers.image.source="https://github.com/ghdtjdwn/geuneul" \
       org.opencontainers.image.revision="${APP_VERSION}"
